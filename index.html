@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order Tracker</title>
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #F8FAFC; color: #1E293B; min-height: 100vh; }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+  .header { background: #fff; border-bottom: 1px solid #E2E8F0; padding: 14px 24px; position: sticky; top: 0; z-index: 100; }
+  .header-inner { max-width: 920px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .header-title { font-size: 17px; font-weight: 700; color: #0F172A; }
+  .header-sub { font-size: 12px; color: #94A3B8; margin-top: 1px; }
+  .header-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .btn { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; border: 1px solid #E2E8F0; background: #fff; color: #475569; transition: background 0.15s; }
+  .btn:hover { background: #F1F5F9; }
+  .btn-primary { background: #0F172A; color: #fff; border: none; }
+  .btn-primary:hover { background: #1E293B; }
+  .btn-danger { border-color: #FEE2E2; background: #FFF5F5; color: #DC2626; }
+  .btn-archive { color: #6366F1; }
+  .btn-restore { background: #EEF2FF; color: #4338CA; border-color: #C7D2FE; }
+  .btn-dashed { border: 1px dashed #CBD5E1; background: transparent; color: #64748B; }
+  .btn-sm { padding: 5px 10px; font-size: 11px; border-radius: 7px; }
+  .input, .select { padding: 6px 10px; border-radius: 8px; border: 1px solid #E2E8F0; font-size: 13px; outline: none; font-family: inherit; background: #fff; }
+  .input:focus { border-color: #6366F1; box-shadow: 0 0 0 2px rgba(99,102,241,0.1); }
+  .select { cursor: pointer; color: #64748B; font-size: 12px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .order-card { background: #fff; border-radius: 12px; margin-bottom: 8px; border: 1px solid #E2E8F0; overflow: hidden; }
+  .order-card.expanded { border-color: #CBD5E1; border-width: 1.5px; }
+  .order-header { padding: 13px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; gap: 10px; }
+  .order-header:hover { background: #FAFBFC; }
+  .order-chevron { font-size: 18px; transition: transform 0.2s; color: #94A3B8; }
+  .order-chevron.open { transform: rotate(90deg); }
+  .order-id { font-size: 11px; font-weight: 600; color: #94A3B8; font-family: monospace; }
+  .order-customer { font-size: 14px; font-weight: 600; color: #0F172A; }
+  .order-meta { font-size: 11px; color: #94A3B8; margin-top: 2px; }
+  .order-notes { padding: 8px 16px; background: #FFFBEB; font-size: 12px; color: #92400E; border-bottom: 1px solid #F1F5F9; }
+  .order-actions { padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; background: #FAFBFC; }
+  .item-row { padding: 10px 16px; border-bottom: 1px solid #F8FAFC; display: flex; align-items: center; gap: 10px; }
+  .item-row.selected { background: #F8FAFF; }
+  .item-thumb { width: 40px; height: 40px; border-radius: 8px; background: #F1F5F9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .item-info { flex: 1; min-width: 0; }
+  .item-name { font-size: 13px; font-weight: 600; color: #1E293B; }
+  .item-desc { font-size: 11px; color: #94A3B8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item-units { font-size: 13px; font-weight: 600; color: #475569; text-align: right; min-width: 44px; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
+  .item-units:hover { background: #F1F5F9; }
+  .item-units-label { font-size: 10px; color: #94A3B8; font-weight: 400; }
+  .item-units-input { width: 52px; padding: 2px 6px; border-radius: 6px; border: 1px solid #6366F1; background: #EEF2FF; font-size: 12px; text-align: right; outline: none; font-family: inherit; }
+  .item-select { padding: 4px 6px; border-radius: 6px; border: 1px solid #E2E8F0; font-size: 10px; cursor: pointer; font-family: inherit; outline: none; max-width: 95px; background: #FAFBFC; }
+  .item-status { padding: 4px 6px; border-radius: 6px; border: 1px solid #E2E8F0; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; outline: none; }
+  .item-delete { background: none; border: none; cursor: pointer; color: #CBD5E1; font-size: 16px; padding: 2px; }
+  .item-delete:hover { color: #EF4444; }
+  .select-all { padding: 6px 16px; border-bottom: 1px solid #F1F5F9; display: flex; align-items: center; gap: 8px; }
+  .select-all label { font-size: 10px; color: #94A3B8; font-weight: 600; cursor: pointer; }
+  .bulk-bar { background: #1E293B; padding: 8px 24px; }
+  .bulk-inner { max-width: 920px; margin: 0 auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bulk-label { font-size: 12px; color: #F8FAFC; font-weight: 600; }
+  .bulk-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #F8FAFC; font-size: 10px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .bulk-clear { margin-left: auto; background: none; border: none; color: #94A3B8; font-size: 11px; cursor: pointer; font-family: inherit; }
+  .view-toggle { display: flex; border-radius: 8px; border: 1px solid #E2E8F0; overflow: hidden; }
+  .view-toggle button { padding: 6px 10px; border: none; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; text-transform: capitalize; background: #fff; color: #94A3B8; }
+  .view-toggle button.active { background: #F1F5F9; color: #0F172A; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal { background: #fff; border-radius: 16px; width: 94%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+  .modal.wide { max-width: 680px; }
+  .modal:not(.wide) { max-width: 520px; }
+  .modal-body { padding: 24px; }
+  .modal-title { font-size: 17px; font-weight: 700; color: #0F172A; margin-bottom: 4px; }
+  .modal-sub { font-size: 12px; color: #94A3B8; margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .field { margin-bottom: 14px; }
+  .field-label { display: block; font-size: 11px; font-weight: 600; color: #64748B; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-label .req { color: #EF4444; }
+  .field-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #E2E8F0; font-size: 13px; font-family: inherit; outline: none; background: #FAFBFC; box-sizing: border-box; }
+  .field-input:focus { border-color: #6366F1; }
+  .tab-bar { display: flex; gap: 6px; margin-bottom: 18px; }
+  .tab-btn { padding: 6px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; text-transform: capitalize; border: 1px solid #E2E8F0; background: #fff; color: #64748B; }
+  .tab-btn.active { border-color: #6366F1; background: #EEF2FF; color: #4338CA; }
+  .settings-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid #F1F5F9; }
+  .dropzone { border: 2px dashed #CBD5E1; border-radius: 12px; padding: 48px 24px; text-align: center; cursor: pointer; background: #FAFBFC; }
+  .dropzone:hover { border-color: #6366F1; }
+  .map-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .map-label { width: 110px; font-size: 12px; font-weight: 600; color: #64748B; }
+  .map-select { flex: 1; padding: 7px 10px; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; border: 1px solid #E2E8F0; background: #FAFBFC; }
+  .map-select.mapped { border-color: #86EFAC; background: #F0FDF4; }
+  .preview-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .preview-table th { padding: 8px 12px; text-align: left; font-weight: 600; color: #64748B; font-size: 11px; background: #F8FAFC; }
+  .preview-table td { padding: 7px 12px; border-top: 1px solid #F1F5F9; }
+  .success-banner { background: #F0FDF4; border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #15803D; margin-bottom: 14px; }
+  .error-banner { background: #FEF2F2; border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #DC2626; margin-top: 10px; }
+  .container { max-width: 920px; margin: 0 auto; padding: 16px 16px 40px; }
+  .checkbox { width: 14px; height: 14px; cursor: pointer; accent-color: #6366F1; flex-shrink: 0; }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #E2E8F0; border-top-color: #6366F1; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 16px; }
+  .login-title { font-size: 24px; font-weight: 700; color: #0F172A; }
+  .login-sub { font-size: 14px; color: #94A3B8; }
+  .login-btn { padding: 12px 32px; border-radius: 10px; border: none; background: #0F172A; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; gap: 10px; }
+  .login-btn:hover { background: #1E293B; }
+  .demo-banner { background: #FEF3C7; padding: 6px 24px; text-align: center; font-size: 12px; color: #92400E; border-bottom: 1px solid #FDE68A; }
+  .demo-banner a { color: #92400E; text-decoration: underline; }
+  .user-info { font-size: 11px; color: #94A3B8; cursor: pointer; }
+  .user-info:hover { color: #64748B; }
+</style>
+</head>
+<body>
+
+<div id="app"><div class="login-screen"><span class="spinner"></span><div class="login-sub">Loading...</div></div></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   CONFIGURATION — Update these values from your Entra ID app
+   ═══════════════════════════════════════════════════════════════ */
+const CLIENT_ID = "YOUR_CLIENT_ID_HERE";       // From Entra ID app registration
+const TENANT_ID = "YOUR_TENANT_ID_HERE";       // From Entra ID app registration
+const SITE_URL  = "https://met1sol.sharepoint.com/sites/Production";
+const ORDERS_LIST = "Orders";
+const ITEMS_LIST  = "OrderItems";
+
+/* ═══════════════════════════════════════════════════════════════
+   MSAL Auth
+   ═══════════════════════════════════════════════════════════════ */
+let msalInstance = null;
+let currentAccount = null;
+let accessToken = null;
+let demoMode = false;
+
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+    redirectUri: window.location.origin,
+  },
+  cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false },
+};
+
+const loginRequest = {
+  scopes: [`${SITE_URL}/.default`, "https://graph.microsoft.com/.default"]
+};
+
+const tokenRequest = {
+  scopes: [`https://met1sol.sharepoint.com/.default`]
+};
+
+async function initAuth() {
+  // If placeholder config, go straight to demo
+  if (CLIENT_ID === "YOUR_CLIENT_ID_HERE") {
+    enterDemoMode();
+    return;
+  }
+  try {
+    msalInstance = new msal.PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+    const response = await msalInstance.handleRedirectPromise();
+    if (response) {
+      currentAccount = response.account;
+    } else {
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) currentAccount = accounts[0];
+    }
+    if (currentAccount) {
+      await getToken();
+      await loadData();
+    } else {
+      renderLoginScreen();
+    }
+  } catch (err) {
+    console.error("Auth init error:", err);
+    enterDemoMode();
+  }
+}
+
+async function login() {
+  try {
+    await msalInstance.loginRedirect({ scopes: ["https://met1sol.sharepoint.com/AllSites.ReadWrite"] });
+  } catch (err) {
+    console.error("Login error:", err);
+  }
+}
+
+function logout() {
+  if (msalInstance) msalInstance.logoutRedirect();
+}
+
+async function getToken() {
+  try {
+    const resp = await msalInstance.acquireTokenSilent({ scopes: ["https://met1sol.sharepoint.com/AllSites.ReadWrite"], account: currentAccount });
+    accessToken = resp.accessToken;
+  } catch (err) {
+    const resp = await msalInstance.acquireTokenRedirect({ scopes: ["https://met1sol.sharepoint.com/AllSites.ReadWrite"] });
+  }
+}
+
+function renderLoginScreen() {
+  document.getElementById("app").innerHTML = `
+    <div class="login-screen">
+      <div style="font-size:40px">📦</div>
+      <div class="login-title">Order Tracker</div>
+      <div class="login-sub">Sign in with your work account to get started</div>
+      <button class="login-btn" onclick="login()">
+        <svg width="16" height="16" viewBox="0 0 21 21" fill="none"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
+        Sign in with Microsoft
+      </button>
+      <div style="margin-top:12px"><button class="btn" onclick="enterDemoMode()">Try Demo Mode</button></div>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SharePoint REST API
+   ═══════════════════════════════════════════════════════════════ */
+function spHeaders(method) {
+  const h = { "Accept": "application/json;odata=verbose", "Authorization": `Bearer ${accessToken}` };
+  if (method === "POST" || method === "MERGE") h["Content-Type"] = "application/json;odata=verbose";
+  return h;
+}
+
+async function spGetItems(listName) {
+  const url = `${SITE_URL}/_api/web/lists/getbytitle('${listName}')/items?$top=5000`;
+  const resp = await fetch(url, { headers: spHeaders() });
+  if (!resp.ok) throw new Error(`Failed to get ${listName}: ${resp.status}`);
+  const data = await resp.json();
+  return data.d.results;
+}
+
+async function spGetListType(listName) {
+  const resp = await fetch(`${SITE_URL}/_api/web/lists/getbytitle('${listName}')`, { headers: spHeaders() });
+  const data = await resp.json();
+  return data.d.ListItemEntityTypeFullName;
+}
+
+async function spCreateItem(listName, data) {
+  const itemType = await spGetListType(listName);
+  const resp = await fetch(`${SITE_URL}/_api/web/lists/getbytitle('${listName}')/items`, {
+    method: "POST",
+    headers: spHeaders("POST"),
+    body: JSON.stringify({ __metadata: { type: itemType }, ...data })
+  });
+  if (!resp.ok) throw new Error(`Failed to create item: ${resp.status}`);
+  return resp.json();
+}
+
+async function spUpdateItem(listName, itemId, data) {
+  const itemType = await spGetListType(listName);
+  await fetch(`${SITE_URL}/_api/web/lists/getbytitle('${listName}')/items(${itemId})`, {
+    method: "POST",
+    headers: { ...spHeaders("MERGE"), "X-HTTP-Method": "MERGE", "If-Match": "*" },
+    body: JSON.stringify({ __metadata: { type: itemType }, ...data })
+  });
+}
+
+async function spDeleteItem(listName, itemId) {
+  await fetch(`${SITE_URL}/_api/web/lists/getbytitle('${listName}')/items(${itemId})`, {
+    method: "POST",
+    headers: { ...spHeaders(), "X-HTTP-Method": "DELETE", "If-Match": "*" }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   App State & Data
+   ═══════════════════════════════════════════════════════════════ */
+let state = {
+  orders: [], loading: true, error: null, expandedOrder: null,
+  view: "active", searchTerm: "", sortBy: "date-desc",
+  selectedItems: {},
+  statuses: ["Pending", "Ordered", "Shipped", "Received"],
+  factories: ["Factory A", "Factory B", "Factory C", "Overseas Plant 1", "Overseas Plant 2"],
+  modal: null, modalData: {},
+};
+
+async function loadData() {
+  state.loading = true; state.error = null; render();
+  try {
+    if (demoMode) { state.loading = false; render(); return; }
+    await getToken();
+    const [orderRows, itemRows] = await Promise.all([spGetItems(ORDERS_LIST), spGetItems(ITEMS_LIST)]);
+    const itemsByOrder = {};
+    itemRows.forEach(row => {
+      const oid = row.OrderID; if (!itemsByOrder[oid]) itemsByOrder[oid] = [];
+      itemsByOrder[oid].push({ spId: row.Id, id: row.Title, name: row.ItemName||"", description: row.Description||"", units: row.Units||0, status: row.Status||state.statuses[0], factory: row.Factory||"", image: null });
+    });
+    state.orders = orderRows.map(row => ({
+      spId: row.Id, id: row.Title, customer: row.Customer||"", submittedBy: row.SubmittedBy||"",
+      date: row.OrderDate ? row.OrderDate.split("T")[0] : "", notes: row.Notes||"",
+      archived: !!row.Archived, archivedDate: row.ArchivedDate ? row.ArchivedDate.split("T")[0] : null,
+      items: itemsByOrder[row.Title] || [],
+    }));
+    state.loading = false;
+  } catch (err) {
+    state.loading = false;
+    state.error = "Could not load data from SharePoint. " + err.message;
+    console.error(err);
+  }
+  render();
+}
+
+/* CRUD operations — work for both live and demo mode */
+let demoIdCounter = { order: 4, item: 7 };
+
+async function createOrder(customer, notes) {
+  if (demoMode) {
+    const id = `ORD-${String(demoIdCounter.order++).padStart(3,"0")}`;
+    state.orders.unshift({ spId: Date.now(), id, customer, submittedBy: currentAccount?.name||"User", date: new Date().toISOString().split("T")[0], notes: notes||"", archived: false, archivedDate: null, items: [] });
+    state.expandedOrder = id; render(); return;
+  }
+  const count = state.orders.length + 1;
+  const orderId = `ORD-${String(count).padStart(3,"0")}`;
+  await spCreateItem(ORDERS_LIST, { Title: orderId, Customer: customer, SubmittedBy: currentAccount?.name||"User", OrderDate: new Date().toISOString(), Notes: notes||"", Archived: false });
+  await loadData(); state.expandedOrder = orderId; render();
+}
+
+async function createItem(orderId, name, desc, units) {
+  if (demoMode) {
+    const id = `ITM-${String(demoIdCounter.item++).padStart(3,"0")}`;
+    state.orders = state.orders.map(o => o.id===orderId ? {...o, items:[...o.items, {spId:Date.now(),id,name,description:desc||"",units:units||0,status:state.statuses[0],image:null,factory:""}]} : o);
+    render(); return;
+  }
+  const ic = state.orders.reduce((s,o)=>s+o.items.length,0)+1;
+  await spCreateItem(ITEMS_LIST, { Title:`ITM-${String(ic).padStart(3,"0")}`, OrderID:orderId, ItemName:name, Description:desc||"", Units:units||0, Status:state.statuses[0], Factory:"" });
+  await loadData();
+}
+
+async function updateItemData(spId, data) {
+  if (demoMode) {
+    state.orders = state.orders.map(o=>({...o,items:o.items.map(i=>i.spId===spId?{...i,...(data.ItemName!==undefined?{name:data.ItemName}:{}), ...(data.Description!==undefined?{description:data.Description}:{}), ...(data.Units!==undefined?{units:data.Units}:{}), ...(data.Status?{status:data.Status}:{}), ...(data.Factory!==undefined?{factory:data.Factory}:{})}:i)}));
+    render(); return;
+  }
+  await spUpdateItem(ITEMS_LIST, spId, data); await loadData();
+}
+
+async function deleteItemSP(spId) {
+  if (demoMode) { state.orders=state.orders.map(o=>({...o,items:o.items.filter(i=>i.spId!==spId)})); render(); return; }
+  await spDeleteItem(ITEMS_LIST, spId); await loadData();
+}
+
+async function deleteOrderSP(order) {
+  if (demoMode) { state.orders=state.orders.filter(o=>o.id!==order.id); if(state.expandedOrder===order.id)state.expandedOrder=null; render(); return; }
+  for (const item of order.items) await spDeleteItem(ITEMS_LIST, item.spId);
+  await spDeleteItem(ORDERS_LIST, order.spId); await loadData();
+}
+
+async function archiveOrderSP(order) {
+  if (demoMode) { state.orders=state.orders.map(o=>o.id===order.id?{...o,archived:true,archivedDate:new Date().toISOString().split("T")[0]}:o); state.expandedOrder=null; render(); return; }
+  await spUpdateItem(ORDERS_LIST, order.spId, { Archived:true, ArchivedDate:new Date().toISOString() }); state.expandedOrder=null; await loadData();
+}
+
+async function restoreOrderSP(order) {
+  if (demoMode) { state.orders=state.orders.map(o=>o.id===order.id?{...o,archived:false,archivedDate:null}:o); render(); return; }
+  await spUpdateItem(ORDERS_LIST, order.spId, { Archived:false, ArchivedDate:null }); await loadData();
+}
+
+async function bulkUpdateStatus(newStatus) {
+  if (demoMode) { state.orders=state.orders.map(o=>({...o,items:o.items.map(i=>state.selectedItems[i.id]?{...i,status:newStatus}:i)})); state.selectedItems={}; render(); return; }
+  const promises = [];
+  state.orders.forEach(o=>o.items.forEach(i=>{ if(state.selectedItems[i.id]) promises.push(spUpdateItem(ITEMS_LIST,i.spId,{Status:newStatus})); }));
+  await Promise.all(promises); state.selectedItems={}; await loadData();
+}
+
+async function importOrders(ordersData) {
+  for (const o of ordersData) {
+    if (demoMode) {
+      const id=`ORD-${String(demoIdCounter.order++).padStart(3,"0")}`;
+      const items=o.items.map(it=>({spId:Date.now()+Math.random(),id:`ITM-${String(demoIdCounter.item++).padStart(3,"0")}`,name:it.name,description:it.description||"",units:it.units||0,status:state.statuses[0],image:null,factory:""}));
+      state.orders.unshift({spId:Date.now(),id,customer:o.customer,submittedBy:"User",date:new Date().toISOString().split("T")[0],notes:o.notes||"",archived:false,archivedDate:null,items});
+    } else {
+      const count=state.orders.length+ordersData.indexOf(o)+1;
+      const orderId=`ORD-${String(count).padStart(3,"0")}`;
+      await spCreateItem(ORDERS_LIST,{Title:orderId,Customer:o.customer,SubmittedBy:currentAccount?.name||"User",OrderDate:new Date().toISOString(),Notes:o.notes||"",Archived:false});
+      for(const item of o.items){
+        const ic=state.orders.reduce((s,o)=>s+o.items.length,0)+1;
+        await spCreateItem(ITEMS_LIST,{Title:`ITM-${String(ic).padStart(3,"0")}`,OrderID:orderId,ItemName:item.name,Description:item.description||"",Units:item.units||0,Status:state.statuses[0],Factory:""});
+      }
+    }
+  }
+  if(!demoMode) await loadData();
+  else { if(state.orders.length) state.expandedOrder=state.orders[0].id; render(); }
+}
+
+/* ── Demo Mode ── */
+const DEMO_DATA = [
+  {spId:1,id:"ORD-001",customer:"Acme Manufacturing",submittedBy:"M. Reynolds",date:"2026-03-15",notes:"Urgent — production line B down",archived:false,archivedDate:null,items:[
+    {spId:1,id:"ITM-001",name:"Industrial Bearings",description:"SKF 6205-2RS deep groove",units:250,status:"Received",image:null,factory:"Factory A"},
+    {spId:2,id:"ITM-002",name:"Bearing Housings",description:"Cast iron pillow block, 25mm",units:250,status:"Shipped",image:null,factory:"Factory A"},
+    {spId:3,id:"ITM-003",name:"Lubricant Cartridges",description:"High-temp lithium grease",units:48,status:"Ordered",image:null,factory:"Factory B"},
+  ]},
+  {spId:2,id:"ORD-002",customer:"Delta Logistics",submittedBy:"M. Reynolds",date:"2026-03-22",notes:"",archived:false,archivedDate:null,items:[
+    {spId:4,id:"ITM-004",name:"Hydraulic Cylinders",description:'3" bore x 18" stroke',units:12,status:"Ordered",image:null,factory:"Overseas Plant 1"},
+    {spId:5,id:"ITM-005",name:"Hydraulic Hoses",description:'1/2" braided steel, 6ft',units:24,status:"Pending",image:null,factory:""},
+  ]},
+  {spId:3,id:"ORD-003",customer:"FreshPack Foods",submittedBy:"M. Reynolds",date:"2026-03-30",notes:"FDA food-grade required",archived:false,archivedDate:null,items:[
+    {spId:6,id:"ITM-006",name:"Conveyor Belt Sections",description:'24" PVC, FDA grade',units:8,status:"Pending",image:null,factory:""},
+  ]},
+];
+
+function enterDemoMode() {
+  demoMode = true;
+  state.orders = JSON.parse(JSON.stringify(DEMO_DATA));
+  state.loading = false; state.error = null;
+  render();
+}
+
+/* ── Helpers ── */
+const SC = ["#F59E0B","#3B82F6","#8B5CF6","#10B981","#EF4444","#EC4899","#14B8A6","#F97316"];
+function getStatusColor(s) { const i=state.statuses.indexOf(s); return SC[i>=0?i%SC.length:0]; }
+function deriveOrderStatus(items) { if(!items.length)return"Open"; if(items.every(i=>i.status===state.statuses[state.statuses.length-1]))return"Complete"; if(items.some(i=>i.status!==state.statuses[0]))return"In Progress"; return"Open"; }
+function orderStatusColor(s) { return s==="Complete"?"#10B981":s==="In Progress"?"#3B82F6":"#F59E0B"; }
+function getPrimaryFactory(o) { const c={}; o.items.forEach(i=>{if(i.factory)c[i.factory]=(c[i.factory]||0)+1}); let b="",m=0; for(const[f,n] of Object.entries(c))if(n>m){b=f;m=n;} return b; }
+function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"); }
+const FP = { name:[/^item$/i,/item.?name/i,/product/i,/^name$/i,/part/i,/material/i], description:[/desc/i,/detail/i,/spec/i,/^note/i], units:[/^qty$/i,/quant/i,/unit/i,/^amount$/i,/^count$/i,/pcs/i], customer:[/customer/i,/client/i,/buyer/i,/company/i] };
+function autoMap(cols) { const m={name:"",description:"",units:"",customer:""}; const u=new Set(); for(const[f,ps] of Object.entries(FP))for(const p of ps){const mt=cols.find(c=>p.test(c.trim())&&!u.has(c));if(mt){m[f]=mt;u.add(mt);break;}} return m; }
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════════════════════════════ */
+function render() {
+  const app = document.getElementById("app");
+  const active=state.orders.filter(o=>!o.archived), archived=state.orders.filter(o=>o.archived);
+  const display=state.view==="active"?active:archived;
+  const s=state.searchTerm.toLowerCase();
+  const filtered=display.filter(o=>o.customer.toLowerCase().includes(s)||o.id.toLowerCase().includes(s)||o.items.some(i=>i.name.toLowerCase().includes(s)));
+  const sorted=[...filtered].sort((a,b)=>{switch(state.sortBy){case"date-desc":return(b.date||"").localeCompare(a.date||"");case"date-asc":return(a.date||"").localeCompare(b.date||"");case"customer-asc":return a.customer.localeCompare(b.customer);case"customer-desc":return b.customer.localeCompare(a.customer);case"status":{const o={Open:0,"In Progress":1,Complete:2};return(o[deriveOrderStatus(a.items)]??0)-(o[deriveOrderStatus(b.items)]??0);}case"items-desc":return b.items.length-a.items.length;case"factory":return getPrimaryFactory(a).localeCompare(getPrimaryFactory(b));default:return 0;}});
+  const selCount=Object.keys(state.selectedItems).length;
+  const totalItems=active.reduce((s,o)=>s+o.items.length,0);
+  const doneItems=active.reduce((s,o)=>s+o.items.filter(i=>i.status===state.statuses[state.statuses.length-1]).length,0);
+  const userName=currentAccount?.name||"Demo User";
+
+  let h = `<div class="header"><div class="header-inner"><div><div class="header-title">Order Tracker</div><div class="header-sub">${active.length} orders · ${totalItems} items · ${doneItems} complete</div></div><div class="header-actions">
+    <input class="input" type="text" placeholder="Search..." value="${esc(state.searchTerm)}" oninput="state.searchTerm=this.value;render()" style="width:150px">
+    <select class="select" onchange="state.sortBy=this.value;render()">
+      <option value="date-desc" ${state.sortBy==="date-desc"?"selected":""}>Newest</option><option value="date-asc" ${state.sortBy==="date-asc"?"selected":""}>Oldest</option>
+      <option value="customer-asc" ${state.sortBy==="customer-asc"?"selected":""}>Customer A–Z</option><option value="customer-desc" ${state.sortBy==="customer-desc"?"selected":""}>Customer Z–A</option>
+      <option value="status" ${state.sortBy==="status"?"selected":""}>By Status</option><option value="items-desc" ${state.sortBy==="items-desc"?"selected":""}>Most Items</option>
+      <option value="factory" ${state.sortBy==="factory"?"selected":""}>By Factory</option>
+    </select>
+    <div class="view-toggle"><button class="${state.view==="active"?"active":""}" onclick="state.view='active';state.expandedOrder=null;render()">Active</button><button class="${state.view==="archived"?"active":""}" onclick="state.view='archived';state.expandedOrder=null;render()">Archived${archived.length?" ("+archived.length+")":""}</button></div>
+    <button class="btn" onclick="state.modal='settings';state.modalData={tab:'statuses'};render()">⚙</button>
+    <button class="btn" onclick="state.modal='import';state.modalData={step:'upload'};render()">Import</button>
+    <button class="btn btn-primary" onclick="state.modal='newOrder';state.modalData={customer:'',notes:''};render()">+ Order</button>
+    <span class="user-info" onclick="${demoMode?'':'logout()'}" title="${demoMode?'Demo Mode':'Click to sign out'}">${esc(userName)}</span>
+  </div></div></div>`;
+
+  if(demoMode) h+=`<div class="demo-banner"><strong>Demo Mode</strong> — data is not saved. ${CLIENT_ID==="YOUR_CLIENT_ID_HERE"?'Set up Azure AD to connect to SharePoint.':'<a href="#" onclick="location.reload();return false">Reload to connect</a>'}</div>`;
+
+  if(selCount>0) h+=`<div class="bulk-bar"><div class="bulk-inner"><span class="bulk-label">${selCount} selected</span><div style="display:flex;gap:4px">${state.statuses.map(s=>`<button class="bulk-btn" onclick="bulkUpdateStatus('${esc(s)}')">→ ${esc(s)}</button>`).join("")}</div><button class="bulk-clear" onclick="state.selectedItems={};render()">Clear</button></div></div>`;
+
+  h+=`<div class="container">`;
+  if(state.loading) h+=`<div style="text-align:center;padding:60px;color:#94A3B8"><span class="spinner"></span>Loading...</div>`;
+  else if(state.error) h+=`<div style="text-align:center;padding:60px;color:#EF4444;font-size:14px">${esc(state.error)}<br><br><button class="btn btn-primary" onclick="loadData()">Retry</button> <button class="btn" onclick="enterDemoMode()">Demo Mode</button></div>`;
+  else if(sorted.length===0) h+=`<div style="text-align:center;padding:60px;color:#94A3B8;font-size:14px">${state.view==="archived"?"No archived orders":"No orders found"}</div>`;
+  else sorted.forEach(order=>{
+    const isOpen=state.expandedOrder===order.id, oS=deriveOrderStatus(order.items), oC=orderStatusColor(oS);
+    const allSel=order.items.length>0&&order.items.every(i=>state.selectedItems[i.id]);
+    h+=`<div class="order-card ${isOpen?"expanded":""}"><div class="order-header" onclick="state.expandedOrder=state.expandedOrder==='${order.id}'?null:'${order.id}';render()"><div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1"><span class="order-chevron ${isOpen?"open":""}">›</span><div style="min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="order-id">${esc(order.id)}</span><span class="order-customer">${esc(order.customer)}</span></div><div class="order-meta">${order.items.length} item${order.items.length!==1?"s":""} · ${esc(order.date)}${order.archived&&order.archivedDate?` · <span style="color:#6366F1">Archived ${esc(order.archivedDate)}</span>`:""}${getPrimaryFactory(order)?` · ${esc(getPrimaryFactory(order))}`:""}</div></div></div><span class="badge" style="background:${oC}18;color:${oC}"><span class="badge-dot" style="background:${oC}"></span>${oS}</span></div>`;
+    if(isOpen){
+      h+=`<div style="border-top:1px solid #F1F5F9">`;
+      if(order.notes) h+=`<div class="order-notes">${esc(order.notes)}</div>`;
+      if(order.items.length>0&&state.view==="active") h+=`<div class="select-all"><input type="checkbox" class="checkbox" ${allSel?"checked":""} onchange="toggleSelectAll('${order.id}')"><label onclick="toggleSelectAll('${order.id}')">Select all</label></div>`;
+      if(!order.items.length) h+=`<div style="padding:20px 16px;text-align:center;color:#CBD5E1;font-size:12px">No items yet</div>`;
+      order.items.forEach(item=>{
+        const sC=getStatusColor(item.status), isSel=!!state.selectedItems[item.id];
+        h+=`<div class="item-row ${isSel?"selected":""}">`;
+        if(state.view==="active") h+=`<input type="checkbox" class="checkbox" ${isSel?"checked":""} onchange="toggleSelectItem('${order.id}','${item.id}')">`;
+        h+=`<div class="item-thumb"><span style="font-size:13px;opacity:0.3">📦</span></div><div class="item-info"><div class="item-name">${esc(item.name)}</div><div class="item-desc">${esc(item.description)}</div></div>`;
+        h+=`<div class="item-units" onclick="startEditUnits(event,'${item.id}',${item.spId},${item.units})">${item.units.toLocaleString()}<div class="item-units-label">units</div></div>`;
+        if(state.view==="active"){
+          h+=`<select class="item-select" style="color:${item.factory?"#475569":"#94A3B8"}" onchange="updateItemData(${item.spId},{Factory:this.value})"><option value="">Factory</option>${state.factories.map(f=>`<option value="${esc(f)}" ${item.factory===f?"selected":""}>${esc(f)}</option>`).join("")}</select>`;
+          h+=`<select class="item-status" style="color:${sC};background:${sC}18;border-color:${sC}30" onchange="updateItemData(${item.spId},{Status:this.value})">${state.statuses.map(s=>`<option value="${esc(s)}" ${item.status===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`;
+          h+=`<button class="item-delete" onclick="confirmDeleteItem(${item.spId},'${esc(item.name)}')">×</button>`;
+        }
+        h+=`</div>`;
+      });
+      h+=`<div class="order-actions">`;
+      if(state.view==="active") h+=`<button class="btn btn-dashed btn-sm" onclick="state.modal='addItem';state.modalData={orderId:'${order.id}',name:'',desc:'',units:''};render()">+ Add Item</button><div style="display:flex;gap:6px"><button class="btn btn-sm btn-archive" onclick="archiveOrderSP(state.orders.find(o=>o.id==='${order.id}'))">Archive</button><button class="btn btn-sm btn-danger" onclick="confirmDeleteOrder('${order.id}')">Delete</button></div>`;
+      else h+=`<div style="display:flex;gap:6px"><button class="btn btn-sm btn-restore" onclick="restoreOrderSP(state.orders.find(o=>o.id==='${order.id}'))">Restore</button><button class="btn btn-sm btn-danger" onclick="confirmDeleteOrder('${order.id}')">Delete</button></div>`;
+      h+=`</div></div>`;
+    }
+    h+=`</div>`;
+  });
+  h+=`</div>`;
+
+  // Modals
+  if(state.modal==="newOrder"){const d=state.modalData;h+=`<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body"><div class="modal-title">New Order</div><div class="modal-sub">Create an order, then add items</div><div class="field"><label class="field-label">Customer <span class="req">*</span></label><input class="field-input" value="${esc(d.customer)}" oninput="state.modalData.customer=this.value" placeholder="e.g. Acme Manufacturing"></div><div class="field"><label class="field-label">Notes</label><textarea class="field-input" rows="2" oninput="state.modalData.notes=this.value" placeholder="Special instructions...">${esc(d.notes)}</textarea></div><div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitNewOrder()">Create</button></div></div></div></div>`;}
+  else if(state.modal==="addItem"){const d=state.modalData;const order=state.orders.find(o=>o.id===d.orderId);h+=`<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body"><div class="modal-title">Add Item</div><div class="modal-sub">to ${order?esc(order.customer):""}</div><div class="field"><label class="field-label">Item Name <span class="req">*</span></label><input class="field-input" value="${esc(d.name)}" oninput="state.modalData.name=this.value" placeholder="e.g. Hydraulic Cylinders"></div><div class="field"><label class="field-label">Description</label><input class="field-input" value="${esc(d.desc)}" oninput="state.modalData.desc=this.value" placeholder="Specs..."></div><div class="field"><label class="field-label">Units <span class="req">*</span></label><input class="field-input" type="number" value="${esc(d.units)}" oninput="state.modalData.units=this.value" placeholder="0"></div><div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitNewItem()">Add</button></div></div></div></div>`;}
+  else if(state.modal==="settings"){const tab=state.modalData.tab||"statuses";const list=tab==="statuses"?state.statuses:state.factories;h+=`<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body"><div class="modal-title">Settings</div><div class="tab-bar"><button class="tab-btn ${tab==="statuses"?"active":""}" onclick="state.modalData.tab='statuses';render()">Statuses</button><button class="tab-btn ${tab==="factories"?"active":""}" onclick="state.modalData.tab='factories';render()">Factories</button></div>${tab==="statuses"?`<div style="font-size:11px;color:#94A3B8;margin-bottom:10px">First = default. Last = complete.</div>`:""} ${list.map((v,i)=>`<div class="settings-item"><div style="display:flex;align-items:center;gap:8px">${tab==="statuses"?`<span style="width:8px;height:8px;border-radius:50%;background:${SC[i%SC.length]};display:inline-block"></span>`:""}<span style="font-size:13px;color:#1E293B">${esc(v)}</span></div><button class="item-delete" onclick="removeSetting('${tab}','${esc(v)}')">×</button></div>`).join("")}<div style="display:flex;gap:8px;margin-top:12px"><input class="field-input" id="newSettingVal" placeholder="New ${tab==="statuses"?"status":"factory"}" onkeydown="if(event.key==='Enter')addSetting('${tab}')"><button class="btn btn-primary" onclick="addSetting('${tab}')">Add</button></div></div></div></div>`;}
+  else if(state.modal==="confirm"){h+=`<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body"><div style="font-size:15px;font-weight:700;color:#0F172A;margin-bottom:6px">Are you sure?</div><div style="font-size:13px;color:#64748B;margin-bottom:20px">${state.modalData.message||""}</div><div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn" style="background:#EF4444;color:#fff;border:none" onclick="state.modalData.onConfirm();closeModal()">Delete</button></div></div></div></div>`;}
+  else if(state.modal==="import"){const d=state.modalData;
+    if(d.step==="upload") h+=`<div class="modal-overlay" onclick="closeModal()"><div class="modal wide" onclick="event.stopPropagation()"><div class="modal-body"><div class="modal-title">Import Spreadsheet</div><div class="modal-sub">Upload a file</div><div class="dropzone" onclick="document.getElementById('impFile').click()" ondrop="handleImportDrop(event)" ondragover="event.preventDefault()"><div style="font-size:32px;margin-bottom:6px">📄</div><div style="font-size:14px;font-weight:600;color:#475569">Drop file or click to browse</div><div style="font-size:12px;color:#94A3B8;margin-top:4px">.xlsx, .xls, .csv</div></div><input type="file" id="impFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImportFile(this.files[0]);this.value='';">${d.error?`<div class="error-banner">${esc(d.error)}</div>`:""}</div></div></div>`;
+    else if(d.step==="map"){const lb={name:"Item Name",description:"Description",units:"Qty / Units"};h+=`<div class="modal-overlay" onclick="closeModal()"><div class="modal wide" onclick="event.stopPropagation()"><div class="modal-body"><div class="modal-title">Import Spreadsheet</div><div class="modal-sub">Verify mapping</div><div class="success-banner">${d.rows.length} rows from <strong>${esc(d.fileName)}</strong></div>${["name","description","units"].map(f=>`<div class="map-row"><div class="map-label">${lb[f]}${f==="name"?` <span style="color:#EF4444">*</span>`:""}${d.mapping[f]?`<span style="color:#10B981;margin-left:4px">✓</span>`:""}</div><select class="map-select ${d.mapping[f]?"mapped":""}" onchange="state.modalData.mapping.${f}=this.value;render()"><option value="">— Skip —</option>${d.columns.map(c=>`<option value="${esc(c)}" ${d.mapping[f]===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>`).join("")}<div style="border-top:1px solid #F1F5F9;margin-top:14px;padding-top:14px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Customer</div><div style="display:flex;gap:8px;margin-bottom:8px"><button class="tab-btn ${!d.useCol?"active":""}" onclick="state.modalData.useCol=false;render()">Type it in</button><button class="tab-btn ${d.useCol?"active":""}" onclick="state.modalData.useCol=true;render()">From column</button></div>${d.useCol?`<select class="map-select ${d.mapping.customer?"mapped":""}" style="width:100%" onchange="state.modalData.mapping.customer=this.value;render()"><option value="">— Select —</option>${d.columns.map(c=>`<option value="${esc(c)}" ${d.mapping.customer===c?"selected":""}>${esc(c)}</option>`).join("")}</select>`:`<input class="field-input" value="${esc(d.customerName||"")}" oninput="state.modalData.customerName=this.value" placeholder="Customer name">`}</div><div class="modal-actions"><button class="btn" onclick="state.modalData.step='upload';render()">Back</button><button class="btn btn-primary" onclick="state.modalData.step='preview';render()">Preview</button></div></div></div></div>`;}
+    else if(d.step==="preview"){const pv=d.rows.slice(0,5).map(r=>({customer:d.useCol&&d.mapping.customer?String(r[d.mapping.customer]||""):(d.customerName||""),name:d.mapping.name?String(r[d.mapping.name]||""):"",desc:d.mapping.description?String(r[d.mapping.description]||""):"",units:d.mapping.units?parseInt(r[d.mapping.units])||0:0}));h+=`<div class="modal-overlay" onclick="closeModal()"><div class="modal wide" onclick="event.stopPropagation()"><div class="modal-body"><div class="modal-title">Import Spreadsheet</div><div class="modal-sub">Preview</div><div style="border-radius:10px;border:1px solid #E2E8F0;overflow:auto;margin-bottom:14px"><table class="preview-table"><thead><tr><th>Customer</th><th>Item</th><th>Description</th><th style="text-align:right">Units</th></tr></thead><tbody>${pv.map(p=>`<tr><td style="color:#1E293B;font-weight:500">${esc(p.customer)||"—"}</td><td style="color:#1E293B;font-weight:500">${esc(p.name)||"—"}</td><td style="color:#94A3B8;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.desc)||"—"}</td><td style="color:#1E293B;font-weight:600;text-align:right">${p.units||"—"}</td></tr>`).join("")}</tbody></table></div><div style="font-size:12px;color:#64748B;margin-bottom:14px">${d.rows.length} items. All start as "${state.statuses[0]}".</div><div class="modal-actions"><button class="btn" onclick="state.modalData.step='map';render()">Back</button><button class="btn btn-primary" onclick="submitImport()">Import ${d.rows.length} Items</button></div></div></div></div>`;}
+  }
+
+  app.innerHTML = h;
+}
+
+/* ── Event Handlers ── */
+function closeModal(){state.modal=null;state.modalData={};render();}
+function submitNewOrder(){const d=state.modalData;if(!d.customer)return;closeModal();createOrder(d.customer,d.notes);}
+function submitNewItem(){const d=state.modalData;if(!d.name||!d.units)return;closeModal();createItem(d.orderId,d.name,d.desc,parseInt(d.units));}
+function toggleSelectItem(oid,iid){if(state.selectedItems[iid])delete state.selectedItems[iid];else state.selectedItems[iid]=oid;render();}
+function toggleSelectAll(oid){const o=state.orders.find(o=>o.id===oid);if(!o)return;const all=o.items.every(i=>state.selectedItems[i.id]);o.items.forEach(i=>{if(all)delete state.selectedItems[i.id];else state.selectedItems[i.id]=oid;});render();}
+function startEditUnits(e,iid,spId,val){e.stopPropagation();const el=e.currentTarget;el.innerHTML=`<input class="item-units-input" type="number" value="${val}" onblur="commitUnits(this,${spId},${val})" onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.value=${val};this.blur();}">`;el.querySelector("input").focus();}
+function commitUnits(input,spId,old){const v=parseInt(input.value);if(!isNaN(v)&&v>=0&&v!==old)updateItemData(spId,{Units:v});else render();}
+function confirmDeleteItem(spId,name){state.modal="confirm";state.modalData={message:`Delete "${name}"? This cannot be undone.`,onConfirm:()=>deleteItemSP(spId)};render();}
+function confirmDeleteOrder(oid){const o=state.orders.find(o=>o.id===oid);state.modal="confirm";state.modalData={message:`Delete ${oid} (${o.customer}) and all items?`,onConfirm:()=>deleteOrderSP(o)};render();}
+function addSetting(tab){const input=document.getElementById("newSettingVal");const v=input.value.trim();if(!v)return;if(tab==="statuses"&&!state.statuses.includes(v))state.statuses.push(v);if(tab==="factories"&&!state.factories.includes(v))state.factories.push(v);input.value="";render();}
+function removeSetting(tab,val){if(tab==="statuses"){if(state.statuses.length>1)state.statuses=state.statuses.filter(s=>s!==val);}else state.factories=state.factories.filter(f=>f!==val);render();}
+function handleImportDrop(e){e.preventDefault();handleImportFile(e.dataTransfer?.files?.[0]);}
+function handleImportFile(file){if(!file)return;const isCSV=/\.(csv|tsv)$/i.test(file.name);if(isCSV){Papa.parse(file,{header:true,skipEmptyLines:true,complete:r=>{if(r.data?.length)proceedToMap(file.name,Object.keys(r.data[0]),r.data);else{state.modalData.error="No data";render();}},error:()=>{state.modalData.error="Could not read file";render();}});}else{const reader=new FileReader();reader.onload=e=>{try{const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});const json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});if(json.length)proceedToMap(file.name,Object.keys(json[0]),json);else{state.modalData.error="No data";render();}}catch{state.modalData.error="Could not read file";render();}};reader.readAsArrayBuffer(file);}}
+function proceedToMap(fn,cols,rows){const m=autoMap(cols);state.modalData={step:"map",fileName:fn,columns:cols,rows,mapping:m,useCol:!!m.customer,customerName:""};render();}
+async function submitImport(){const d=state.modalData;const grouped={};d.rows.forEach(r=>{const c=d.useCol&&d.mapping.customer?String(r[d.mapping.customer]||"Unknown"):(d.customerName||"Imported");if(!grouped[c])grouped[c]=[];grouped[c].push({name:d.mapping.name?String(r[d.mapping.name]||"Unnamed"):"Unnamed",description:d.mapping.description?String(r[d.mapping.description]||""):"",units:d.mapping.units?parseInt(r[d.mapping.units])||0:0});});closeModal();await importOrders(Object.entries(grouped).map(([c,items])=>({customer:c,notes:`Imported from ${d.fileName}`,items})));}
+
+/* ── Init ── */
+initAuth();
+</script>
+</body>
+</html>
