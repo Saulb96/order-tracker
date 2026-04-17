@@ -167,7 +167,7 @@ function initAuth() {
 
 function login() {
   msalInstance.loginRedirect({
-    scopes: ["https://met1sol.sharepoint.com/AllSites.ReadWrite"]
+    scopes: ["https://met1sol.sharepoint.com/AllSites.Write"]
   });
 }
 
@@ -177,13 +177,13 @@ function logout() {
 
 function getToken() {
   return msalInstance.acquireTokenSilent({
-    scopes: ["https://met1sol.sharepoint.com/AllSites.ReadWrite"],
+    scopes: ["https://met1sol.sharepoint.com/AllSites.Write"],
     account: currentAccount
   }).then(function(resp) {
     accessToken = resp.accessToken;
   }).catch(function() {
     return msalInstance.acquireTokenRedirect({
-      scopes: ["https://met1sol.sharepoint.com/AllSites.ReadWrite"]
+      scopes: ["https://met1sol.sharepoint.com/AllSites.Write"]
     });
   });
 }
