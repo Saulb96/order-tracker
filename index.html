@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order Tracker</title>
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#F8FAFC;color:#1E293B;min-height:100vh}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
+.header{background:#fff;border-bottom:1px solid #E2E8F0;padding:14px 24px;position:sticky;top:0;z-index:100}
+.header-inner{max-width:920px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.header-title{font-size:17px;font-weight:700;color:#0F172A}
+.header-sub{font-size:12px;color:#94A3B8;margin-top:1px}
+.header-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.btn{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid #E2E8F0;background:#fff;color:#475569;transition:background 0.15s}
+.btn:hover{background:#F1F5F9}
+.btn-primary{background:#0F172A;color:#fff;border:none}
+.btn-primary:hover{background:#1E293B}
+.btn-danger{border-color:#FEE2E2;background:#FFF5F5;color:#DC2626}
+.btn-archive{color:#6366F1}
+.btn-restore{background:#EEF2FF;color:#4338CA;border-color:#C7D2FE}
+.btn-dashed{border:1px dashed #CBD5E1;background:transparent;color:#64748B}
+.btn-sm{padding:5px 10px;font-size:11px;border-radius:7px}
+.input,.select{padding:6px 10px;border-radius:8px;border:1px solid #E2E8F0;font-size:13px;outline:none;font-family:inherit;background:#fff}
+.input:focus{border-color:#6366F1;box-shadow:0 0 0 2px rgba(99,102,241,0.1)}
+.select{cursor:pointer;color:#64748B;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-dot{width:6px;height:6px;border-radius:50%}
+.order-card{background:#fff;border-radius:12px;margin-bottom:8px;border:1px solid #E2E8F0;overflow:hidden}
+.order-card.expanded{border-color:#CBD5E1;border-width:1.5px}
+.order-header{padding:13px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:10px}
+.order-header:hover{background:#FAFBFC}
+.order-chevron{font-size:18px;transition:transform 0.2s;color:#94A3B8}
+.order-chevron.open{transform:rotate(90deg)}
+.order-id{font-size:11px;font-weight:600;color:#94A3B8;font-family:monospace}
+.order-customer{font-size:14px;font-weight:600;color:#0F172A}
+.order-meta{font-size:11px;color:#94A3B8;margin-top:2px}
+.order-notes{padding:8px 16px;background:#FFFBEB;font-size:12px;color:#92400E;border-bottom:1px solid #F1F5F9}
+.order-actions{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:#FAFBFC}
+.item-row{padding:10px 16px;border-bottom:1px solid #F8FAFC;display:flex;align-items:center;gap:10px}
+.item-row.selected{background:#F8FAFF}
+.item-thumb{width:40px;height:40px;border-radius:8px;background:#F1F5F9;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.item-info{flex:1;min-width:0}
+.item-name{font-size:13px;font-weight:600;color:#1E293B}
+.item-desc{font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item-units{font-size:13px;font-weight:600;color:#475569;text-align:right;min-width:44px;padding:2px 6px;border-radius:6px;cursor:pointer}
+.item-units:hover{background:#F1F5F9}
+.item-units-label{font-size:10px;color:#94A3B8;font-weight:400}
+.item-units-input{width:52px;padding:2px 6px;border-radius:6px;border:1px solid #6366F1;background:#EEF2FF;font-size:12px;text-align:right;outline:none;font-family:inherit}
+.item-select{padding:4px 6px;border-radius:6px;border:1px solid #E2E8F0;font-size:10px;cursor:pointer;font-family:inherit;outline:none;max-width:95px;background:#FAFBFC}
+.item-status{padding:4px 6px;border-radius:6px;border:1px solid #E2E8F0;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;outline:none}
+.item-delete{background:none;border:none;cursor:pointer;color:#CBD5E1;font-size:16px;padding:2px}
+.item-delete:hover{color:#EF4444}
+.select-all{padding:6px 16px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;gap:8px}
+.select-all label{font-size:10px;color:#94A3B8;font-weight:600;cursor:pointer}
+.bulk-bar{background:#1E293B;padding:8px 24px}
+.bulk-inner{max-width:920px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bulk-label{font-size:12px;color:#F8FAFC;font-weight:600}
+.bulk-btn{padding:4px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#F8FAFC;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit}
+.bulk-clear{margin-left:auto;background:none;border:none;color:#94A3B8;font-size:11px;cursor:pointer;font-family:inherit}
+.view-toggle{display:flex;border-radius:8px;border:1px solid #E2E8F0;overflow:hidden}
+.view-toggle button{padding:6px 10px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;text-transform:capitalize;background:#fff;color:#94A3B8}
+.view-toggle button.active{background:#F1F5F9;color:#0F172A}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:16px;width:94%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.15)}
+.modal.wide{max-width:680px}
+.modal:not(.wide){max-width:520px}
+.modal-body{padding:24px}
+.modal-title{font-size:17px;font-weight:700;color:#0F172A;margin-bottom:4px}
+.modal-sub{font-size:12px;color:#94A3B8;margin-bottom:16px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.field{margin-bottom:14px}
+.field-label{display:block;font-size:11px;font-weight:600;color:#64748B;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em}
+.field-input{width:100%;padding:8px 12px;border-radius:8px;border:1px solid #E2E8F0;font-size:13px;font-family:inherit;outline:none;background:#FAFBFC;box-sizing:border-box}
+.field-input:focus{border-color:#6366F1}
+.tab-bar{display:flex;gap:6px;margin-bottom:18px}
+.tab-btn{padding:6px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-transform:capitalize;border:1px solid #E2E8F0;background:#fff;color:#64748B}
+.tab-btn.active{border-color:#6366F1;background:#EEF2FF;color:#4338CA}
+.settings-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #F1F5F9}
+.dropzone{border:2px dashed #CBD5E1;border-radius:12px;padding:48px 24px;text-align:center;cursor:pointer;background:#FAFBFC}
+.dropzone:hover{border-color:#6366F1}
+.map-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.map-label{width:110px;font-size:12px;font-weight:600;color:#64748B}
+.map-select{flex:1;padding:7px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;border:1px solid #E2E8F0;background:#FAFBFC}
+.map-select.mapped{border-color:#86EFAC;background:#F0FDF4}
+.preview-table{width:100%;border-collapse:collapse;font-size:12px}
+.preview-table th{padding:8px 12px;text-align:left;font-weight:600;color:#64748B;font-size:11px;background:#F8FAFC}
+.preview-table td{padding:7px 12px;border-top:1px solid #F1F5F9}
+.success-banner{background:#F0FDF4;border-radius:8px;padding:8px 12px;font-size:12px;color:#15803D;margin-bottom:14px}
+.error-banner{background:#FEF2F2;border-radius:8px;padding:8px 12px;font-size:12px;color:#DC2626;margin-top:10px}
+.container{max-width:920px;margin:0 auto;padding:16px 16px 40px}
+.checkbox{width:14px;height:14px;cursor:pointer;accent-color:#6366F1;flex-shrink:0}
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid #E2E8F0;border-top-color:#6366F1;border-radius:50%;animation:spin 0.6s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px}
+.login-title{font-size:24px;font-weight:700;color:#0F172A}
+.login-sub{font-size:14px;color:#94A3B8}
+.login-btn{padding:12px 32px;border-radius:10px;border:none;background:#0F172A;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:10px}
+.login-btn:hover{background:#1E293B}
+.demo-banner{background:#FEF3C7;padding:6px 24px;text-align:center;font-size:12px;color:#92400E;border-bottom:1px solid #FDE68A}
+.demo-banner a{color:#92400E;text-decoration:underline}
+.user-info{font-size:11px;color:#94A3B8;cursor:pointer}
+.user-info:hover{color:#64748B}
+</style>
+</head>
+<body>
+<div id="app"><div class="login-screen"><span class="spinner"></span><div class="login-sub">Loading...</div></div></div>
+<script>
+// -- CONFIGURATION --
+var CLIENT_ID = "7184a05e-f154-4dc8-bb4c-d8e83e9bdce8";
+var TENANT_ID = "eeea7e3e-9ccb-4a16-894e-3417c6a7a4c1";
+var SITE_URL = "https://met1sol.sharepoint.com/sites/Production";
+var ORDERS_LIST = "Orders";
+var ITEMS_LIST = "OrderItems";
+
+// -- AUTH STATE --
+var msalInstance = null;
+var currentAccount = null;
+var accessToken = null;
+var demoMode = false;
+
+// -- MSAL CONFIG --
+var msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: "https://login.microsoftonline.com/" + TENANT_ID,
+    redirectUri: window.location.origin + window.location.pathname
+  },
+  cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false }
+};
+
+function initAuth() {
+  if (CLIENT_ID.indexOf("YOUR_") === 0) {
+    enterDemoMode();
+    return;
+  }
+  try {
+    msalInstance = new msal.PublicClientApplication(msalConfig);
+    msalInstance.initialize().then(function() {
+      return msalInstance.handleRedirectPromise();
+    }).then(function(response) {
+      if (response) {
+        currentAccount = response.account;
+      } else {
+        var accounts = msalInstance.getAllAccounts();
+        if (accounts.length > 0) currentAccount = accounts[0];
+      }
+      if (currentAccount) {
+        getToken().then(function() { loadData(); });
+      } else {
+        renderLoginScreen();
+      }
+    }).catch(function(err) {
+      console.error("Auth error:", err);
+      enterDemoMode();
+    });
+  } catch (err) {
+    console.error("MSAL init error:", err);
+    enterDemoMode();
+  }
+}
+
+function login() {
+  msalInstance.loginRedirect({
+    scopes: ["https://met1sol.sharepoint.com/AllSites.Write"]
+  });
+}
+
+function logout() {
+  if (msalInstance) msalInstance.logoutRedirect();
+}
+
+function getToken() {
+  return msalInstance.acquireTokenSilent({
+    scopes: ["https://met1sol.sharepoint.com/AllSites.Write"],
+    account: currentAccount
+  }).then(function(resp) {
+    accessToken = resp.accessToken;
+  }).catch(function() {
+    return msalInstance.acquireTokenRedirect({
+      scopes: ["https://met1sol.sharepoint.com/AllSites.Write"]
+    });
+  });
+}
+
+function renderLoginScreen() {
+  document.getElementById("app").innerHTML =
+    '<div class="login-screen">' +
+    '<div style="font-size:40px">&#128230;</div>' +
+    '<div class="login-title">Order Tracker</div>' +
+    '<div class="login-sub">Sign in with your work account to get started</div>' +
+    '<button class="login-btn" onclick="login()">Sign in with Microsoft</button>' +
+    '<div style="margin-top:12px"><button class="btn" onclick="enterDemoMode()">Try Demo Mode</button></div>' +
+    '</div>';
+}
+
+// -- SHAREPOINT REST API --
+function spHeaders(method) {
+  var h = { "Accept": "application/json;odata=verbose", "Authorization": "Bearer " + accessToken };
+  if (method === "POST" || method === "MERGE") h["Content-Type"] = "application/json;odata=verbose";
+  return h;
+}
+
+function spGetItems(listName) {
+  var url = SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/items?$top=5000";
+  return fetch(url, { headers: spHeaders() }).then(function(r) {
+    if (!r.ok) throw new Error("Failed: " + r.status);
+    return r.json();
+  }).then(function(d) { return d.d.results; });
+}
+
+function spGetListType(listName) {
+  return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')", { headers: spHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { return d.d.ListItemEntityTypeFullName; });
+}
+
+function spGetListFields(listName) {
+  return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/fields?$filter=Hidden eq false and ReadOnlyField eq false", { headers: spHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var fields = d.d.results.map(function(f) { return { title: f.Title, internalName: f.InternalName }; });
+      console.log(listName + " FIELDS:", JSON.stringify(fields));
+      return fields;
+    });
+}
+
+function spCreateItem(listName, data) {
+  return spGetListType(listName).then(function(itemType) {
+    data.__metadata = { type: itemType };
+    return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/items", {
+      method: "POST", headers: spHeaders("POST"), body: JSON.stringify(data)
+    });
+  }).then(function(r) {
+    if (!r.ok) {
+      return r.json().then(function(err) {
+        var msg = (err && err.error && err.error.message && err.error.message.value) || ("HTTP " + r.status);
+        throw new Error(listName + " create failed: " + msg);
+      });
+    }
+    return r.json();
+  });
+}
+
+function spUpdateItem(listName, itemId, data) {
+  return spGetListType(listName).then(function(itemType) {
+    data.__metadata = { type: itemType };
+    var h = spHeaders("MERGE");
+    h["X-HTTP-Method"] = "MERGE";
+    h["If-Match"] = "*";
+    return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/items(" + itemId + ")", {
+      method: "POST", headers: h, body: JSON.stringify(data)
+    });
+  });
+}
+
+function spDeleteItem(listName, itemId) {
+  var h = spHeaders();
+  h["X-HTTP-Method"] = "DELETE";
+  h["If-Match"] = "*";
+  return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/items(" + itemId + ")", {
+    method: "POST", headers: h
+  });
+}
+
+// -- SHAREPOINT IMAGE UPLOAD --
+function uploadImageToSP(base64DataUrl, fileName) {
+  // Convert base64 data URL to binary
+  var parts = base64DataUrl.split(',');
+  var mime = parts[0].match(/:(.*?);/)[1];
+  var binary = atob(parts[1]);
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  var ext = mime === 'image/png' ? '.png' : '.jpg';
+  var safeName = fileName.replace(/[^a-zA-Z0-9_-]/g, '_') + '_' + Date.now() + ext;
+  var folderUrl = SITE_URL + "/SiteAssets/OrderImages";
+  var uploadUrl = SITE_URL + "/_api/web/GetFolderByServerRelativeUrl('/sites/Production/SiteAssets/OrderImages')/Files/add(url='" + safeName + "',overwrite=true)";
+
+  // First ensure folder exists, then upload
+  return ensureFolder(folderUrl).then(function() {
+    return fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json;odata=verbose",
+        "Authorization": "Bearer " + accessToken,
+        "Content-Length": bytes.length
+      },
+      body: bytes.buffer
+    });
+  }).then(function(r) {
+    if (!r.ok) throw new Error("Image upload failed: " + r.status);
+    return r.json();
+  }).then(function(data) {
+    // Return the server-relative URL converted to absolute
+    var serverRelUrl = data.d.ServerRelativeUrl;
+    return SITE_URL.replace("/sites/Production", "") + serverRelUrl;
+  });
+}
+
+function ensureFolder(folderUrl) {
+  // Try to get the folder, create it if it doesn't exist
+  return fetch(SITE_URL + "/_api/web/GetFolderByServerRelativeUrl('/sites/Production/SiteAssets/OrderImages')", {
+    headers: { "Accept": "application/json;odata=verbose", "Authorization": "Bearer " + accessToken }
+  }).then(function(r) {
+    if (r.ok) return; // Folder exists
+    // Create folder
+    return fetch(SITE_URL + "/_api/web/folders", {
+      method: "POST",
+      headers: {
+        "Accept": "application/json;odata=verbose",
+        "Content-Type": "application/json;odata=verbose",
+        "Authorization": "Bearer " + accessToken
+      },
+      body: JSON.stringify({ __metadata: { type: "SP.Folder" }, ServerRelativeUrl: "/sites/Production/SiteAssets/OrderImages" })
+    });
+  });
+}
+
+// -- APP STATE --
+var state = {
+  orders: [], loading: true, error: null, expandedOrder: null,
+  view: "active", searchTerm: "", sortBy: "date-desc",
+  selectedItems: {},
+  statuses: ["Pending", "Ordered", "Shipped", "Received"],
+  factories: ["Factory A", "Factory B", "Factory C", "Overseas Plant 1", "Overseas Plant 2"],
+  modal: null, modalData: {}
+};
+
+// -- DATA OPERATIONS --
+var demoIdCounter = { order: 4, item: 7 };
+
+function loadData() {
+  state.loading = true; state.error = null; render();
+  if (demoMode) { state.loading = false; render(); return; }
+  getToken().then(function() {
+    // Log actual field names to help debug
+    spGetListFields(ORDERS_LIST).catch(function(e) { console.warn("Could not get Orders fields:", e); });
+    return Promise.all([spGetItems(ORDERS_LIST), spGetItems(ITEMS_LIST)]);
+  }).then(function(results) {
+    var orderRows = results[0], itemRows = results[1];
+
+    // Log first row to help debug field names
+    if (orderRows.length > 0) console.log("ORDER FIELDS:", Object.keys(orderRows[0]).filter(function(k) { return k.indexOf("__") !== 0 && k !== "__metadata"; }));
+    if (itemRows.length > 0) console.log("ITEM FIELDS:", Object.keys(itemRows[0]).filter(function(k) { return k.indexOf("__") !== 0 && k !== "__metadata"; }));
+
+    var itemsByOrder = {};
+    itemRows.forEach(function(row) {
+      // Try multiple possible field names for OrderID
+      var oid = row.OrderID || row.OrderID0 || row.Title || "";
+      if (!itemsByOrder[oid]) itemsByOrder[oid] = [];
+      itemsByOrder[oid].push({
+        spId: row.Id,
+        id: row.Title || row.ItemID || "",
+        name: row.ItemName || row.ItemName0 || "",
+        description: row.Description || row.Description0 || "",
+        units: row.Units || row.Units0 || 0,
+        status: row.Status || row.Status0 || state.statuses[0],
+        factory: row.Factory || row.Factory0 || "",
+        image: row.ImageURL || (window._localImages && window._localImages[row.Id]) || null
+      });
+    });
+    state.orders = orderRows.map(function(row) {
+      // Try multiple possible field names
+      var orderId = row.Title || row.OrderID || "";
+      return {
+        spId: row.Id,
+        id: orderId,
+        customer: row.Customer || row.Customer0 || "",
+        submittedBy: row.SubmittedBy || row.SubmittedBy0 || "",
+        date: (row.Date || row.OrderDate) ? (row.Date || row.OrderDate).split("T")[0] : "",
+        notes: row.Notes || row.Notes0 || row.Notes1 || "",
+        archived: !!(row.Archived || row.Archived0),
+        archivedDate: (row.ArchivedDate || row.ArchivedDate0) ? (row.ArchivedDate || row.ArchivedDate0).split("T")[0] : null,
+        items: itemsByOrder[orderId] || []
+      };
+    });
+    state.loading = false; render();
+  }).catch(function(err) {
+    state.loading = false;
+    state.error = "Could not load from SharePoint. " + err.message;
+    console.error(err); render();
+  });
+}
+
+function createOrder(customer, notes) {
+  if (demoMode) {
+    var id = "ORD-" + String(demoIdCounter.order++).padStart(3, "0");
+    state.orders.unshift({ spId: Date.now(), id: id, customer: customer, submittedBy: "User", date: new Date().toISOString().split("T")[0], notes: notes || "", archived: false, archivedDate: null, items: [] });
+    state.expandedOrder = id; render(); return;
+  }
+  var count = state.orders.length + 1;
+  var orderId = "ORD-" + String(count).padStart(3, "0");
+  // Notes is a reserved SP field - try without it first, then add other fields carefully
+  var orderPayload = { Title: orderId, Customer: customer, Date: new Date().toISOString(), Archived: false };
+  if (notes && notes.trim()) orderPayload.Notes = notes;
+  if (currentAccount && currentAccount.name) orderPayload.SubmittedBy = currentAccount.name;
+  spCreateItem(ORDERS_LIST, orderPayload).then(function(result) {
+    console.log("Order created OK:", result && result.d && result.d.Id);
+    state.expandedOrder = orderId; loadData();
+  }).catch(function(err) {
+    console.error("Order create error:", err);
+    alert("Error creating order: " + err.message);
+  });
+}
+
+function createItem(orderId, name, desc, units) {
+  if (demoMode) {
+    var id = "ITM-" + String(demoIdCounter.item++).padStart(3, "0");
+    state.orders = state.orders.map(function(o) {
+      return o.id === orderId ? Object.assign({}, o, { items: o.items.concat([{ spId: Date.now(), id: id, name: name, description: desc || "", units: units || 0, status: state.statuses[0], image: null, factory: "" }]) }) : o;
+    });
+    render(); return;
+  }
+  var ic = state.orders.reduce(function(s, o) { return s + o.items.length; }, 0) + 1;
+  spCreateItem(ITEMS_LIST, { Title: "ITM-" + String(ic).padStart(3, "0"), OrderID: orderId, ItemName: name, Description: desc || "", Units: units || 0, Status: state.statuses[0], Factory: "" }).then(function() { loadData(); });
+}
+
+function updateItemData(spId, data) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) {
+      return Object.assign({}, o, { items: o.items.map(function(i) {
+        if (i.spId !== spId) return i;
+        var u = Object.assign({}, i);
+        if (data.Units !== undefined) u.units = data.Units;
+        if (data.Status) u.status = data.Status;
+        if (data.Factory !== undefined) u.factory = data.Factory;
+        return u;
+      })});
+    });
+    render(); return;
+  }
+  spUpdateItem(ITEMS_LIST, spId, data).then(function() { loadData(); });
+}
+
+function deleteItemSP(spId) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return Object.assign({}, o, { items: o.items.filter(function(i) { return i.spId !== spId; }) }); });
+    render(); return;
+  }
+  spDeleteItem(ITEMS_LIST, spId).then(function() { loadData(); });
+}
+
+function deleteOrderSP(order) {
+  if (demoMode) {
+    state.orders = state.orders.filter(function(o) { return o.id !== order.id; });
+    if (state.expandedOrder === order.id) state.expandedOrder = null;
+    render(); return;
+  }
+  var promises = order.items.map(function(i) { return spDeleteItem(ITEMS_LIST, i.spId); });
+  Promise.all(promises).then(function() { return spDeleteItem(ORDERS_LIST, order.spId); }).then(function() { loadData(); });
+}
+
+function archiveOrderSP(order) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return o.id === order.id ? Object.assign({}, o, { archived: true, archivedDate: new Date().toISOString().split("T")[0] }) : o; });
+    state.expandedOrder = null; render(); return;
+  }
+  spUpdateItem(ORDERS_LIST, order.spId, { Archived: true, ArchivedDate: new Date().toISOString() }).then(function() { state.expandedOrder = null; loadData(); });
+}
+
+function restoreOrderSP(order) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return o.id === order.id ? Object.assign({}, o, { archived: false, archivedDate: null }) : o; });
+    render(); return;
+  }
+  spUpdateItem(ORDERS_LIST, order.spId, { Archived: false, ArchivedDate: null }).then(function() { loadData(); });
+}
+
+function bulkUpdateStatus(newStatus) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return Object.assign({}, o, { items: o.items.map(function(i) { return state.selectedItems[i.id] ? Object.assign({}, i, { status: newStatus }) : i; }) }); });
+    state.selectedItems = {}; render(); return;
+  }
+  var promises = [];
+  state.orders.forEach(function(o) { o.items.forEach(function(i) { if (state.selectedItems[i.id]) promises.push(spUpdateItem(ITEMS_LIST, i.spId, { Status: newStatus })); }); });
+  Promise.all(promises).then(function() { state.selectedItems = {}; loadData(); });
+}
+
+function importOrders(ordersData) {
+  if (demoMode) {
+    ordersData.forEach(function(o) {
+      var id = "ORD-" + String(demoIdCounter.order++).padStart(3, "0");
+      var items = o.items.map(function(it) { return { spId: Date.now() + Math.random(), id: "ITM-" + String(demoIdCounter.item++).padStart(3, "0"), name: it.name, description: it.description || "", units: it.units || 0, status: state.statuses[0], image: null, factory: "" }; });
+      state.orders.unshift({ spId: Date.now(), id: id, customer: o.customer, submittedBy: "User", date: new Date().toISOString().split("T")[0], notes: o.notes || "", archived: false, archivedDate: null, items: items });
+    });
+    if (state.orders.length) state.expandedOrder = state.orders[0].id;
+    render(); return;
+  }
+  console.log("IMPORT START - ordersData:", JSON.stringify(ordersData.map(function(o){return{customer:o.customer,itemCount:o.items.length};})));
+  var itemCounter = state.orders.reduce(function(s, o) { return s + o.items.length; }, 0);
+  var chain = Promise.resolve();
+  ordersData.forEach(function(o, idx) {
+    chain = chain.then(function() {
+      var count = state.orders.length + idx + 1;
+      var orderId = "ORD-" + String(count).padStart(3, "0");
+      var orderPayload = { Title: orderId, Customer: o.customer || "Unknown", Date: new Date().toISOString(), Archived: false };
+      if (o.notes && o.notes.trim()) orderPayload.Notes = o.notes;
+      if (currentAccount && currentAccount.name) orderPayload.SubmittedBy = currentAccount.name;
+      console.log("Creating order:", orderId, "payload:", JSON.stringify(orderPayload));
+      return spCreateItem(ORDERS_LIST, orderPayload).then(function(result) {
+        console.log("Order CREATED OK:", orderId, "SP ID:", result && result.d && result.d.Id);
+        var itemChain = Promise.resolve();
+        o.items.forEach(function(item) {
+          itemChain = itemChain.then(function() {
+            itemCounter++;
+            var itemId = "ITM-" + String(itemCounter).padStart(3, "0");
+            var imageUploadPromise = item.image && !demoMode
+              ? uploadImageToSP(item.image, itemId)
+              : Promise.resolve(null);
+            return imageUploadPromise.then(function(imageUrl) {
+              var itemPayload = { Title: itemId, OrderID: orderId, ItemName: item.name, Description: item.description || "", Units: item.units || 0, Status: state.statuses[0], Factory: "" };
+              if (imageUrl) itemPayload.ImageURL = imageUrl;
+              return spCreateItem(ITEMS_LIST, itemPayload);
+            }).catch(function(err) {
+              console.warn("Image upload failed, creating item without image:", err);
+              return spCreateItem(ITEMS_LIST, { Title: itemId, OrderID: orderId, ItemName: item.name, Description: item.description || "", Units: item.units || 0, Status: state.statuses[0], Factory: "" });
+            });
+          });
+        });
+        return itemChain;
+      }).catch(function(err) {
+        console.error("ORDER CREATE FAILED for", orderId, err);
+        alert("Order create failed for " + orderId + ": " + err.message);
+        throw err;
+      });
+    });
+  });
+  chain.then(function() { console.log("IMPORT DONE"); loadData(); }).catch(function(err) { console.error("Import chain failed:", err); });
+}
+
+// -- DEMO DATA --
+var DEMO_DATA = [
+  {spId:1,id:"ORD-001",customer:"Acme Manufacturing",submittedBy:"M. Reynolds",date:"2026-03-15",notes:"Urgent - production line B down",archived:false,archivedDate:null,items:[
+    {spId:1,id:"ITM-001",name:"Industrial Bearings",description:"SKF 6205-2RS deep groove",units:250,status:"Received",image:null,factory:"Factory A"},
+    {spId:2,id:"ITM-002",name:"Bearing Housings",description:"Cast iron pillow block 25mm",units:250,status:"Shipped",image:null,factory:"Factory A"},
+    {spId:3,id:"ITM-003",name:"Lubricant Cartridges",description:"High-temp lithium grease",units:48,status:"Ordered",image:null,factory:"Factory B"}
+  ]},
+  {spId:2,id:"ORD-002",customer:"Delta Logistics",submittedBy:"M. Reynolds",date:"2026-03-22",notes:"",archived:false,archivedDate:null,items:[
+    {spId:4,id:"ITM-004",name:"Hydraulic Cylinders",description:"3in bore x 18in stroke",units:12,status:"Ordered",image:null,factory:"Overseas Plant 1"},
+    {spId:5,id:"ITM-005",name:"Hydraulic Hoses",description:"1/2in braided steel 6ft",units:24,status:"Pending",image:null,factory:""}
+  ]},
+  {spId:3,id:"ORD-003",customer:"FreshPack Foods",submittedBy:"M. Reynolds",date:"2026-03-30",notes:"FDA food-grade required",archived:false,archivedDate:null,items:[
+    {spId:6,id:"ITM-006",name:"Conveyor Belt Sections",description:"24in PVC FDA grade",units:8,status:"Pending",image:null,factory:""}
+  ]}
+];
+
+function enterDemoMode() {
+  demoMode = true;
+  state.orders = JSON.parse(JSON.stringify(DEMO_DATA));
+  state.loading = false; state.error = null;
+  render();
+}
+
+// -- HELPERS --
+var SC = ["#F59E0B","#3B82F6","#8B5CF6","#10B981","#EF4444","#EC4899","#14B8A6","#F97316"];
+function getStatusColor(s) { var i = state.statuses.indexOf(s); return SC[i >= 0 ? i % SC.length : 0]; }
+function deriveOrderStatus(items) {
+  if (!items.length) return "Open";
+  var last = state.statuses[state.statuses.length - 1];
+  if (items.every(function(i) { return i.status === last; })) return "Complete";
+  if (items.some(function(i) { return i.status !== state.statuses[0]; })) return "In Progress";
+  return "Open";
+}
+function orderStatusColor(s) { return s === "Complete" ? "#10B981" : s === "In Progress" ? "#3B82F6" : "#F59E0B"; }
+function getPrimaryFactory(o) { var c = {}; o.items.forEach(function(i) { if (i.factory) c[i.factory] = (c[i.factory] || 0) + 1; }); var b = "", m = 0; for (var f in c) { if (c[f] > m) { b = f; m = c[f]; } } return b; }
+function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"); }
+var FP = { name:[/^item$/i,/item.?name/i,/product/i,/^name$/i,/part/i,/material/i], description:[/desc/i,/detail/i,/spec/i,/^note/i], units:[/^qty$/i,/quant/i,/unit/i,/^amount$/i,/^count$/i,/pcs/i], customer:[/customer/i,/client/i,/buyer/i,/company/i] };
+function autoMap(cols) { var m = {name:"",description:"",units:"",customer:""}; var u = {}; for (var f in FP) { for (var p = 0; p < FP[f].length; p++) { for (var c = 0; c < cols.length; c++) { if (FP[f][p].test(cols[c].trim()) && !u[cols[c]]) { m[f] = cols[c]; u[cols[c]] = true; break; } } if (m[f]) break; } } return m; }
+
+// -- RENDER --
+function render() {
+  var app = document.getElementById("app");
+  var active = state.orders.filter(function(o) { return !o.archived; });
+  var archived = state.orders.filter(function(o) { return o.archived; });
+  var display = state.view === "active" ? active : archived;
+  var s = state.searchTerm.toLowerCase();
+  var filtered = display.filter(function(o) {
+    return o.customer.toLowerCase().indexOf(s) >= 0 || o.id.toLowerCase().indexOf(s) >= 0 || o.items.some(function(i) { return i.name.toLowerCase().indexOf(s) >= 0; });
+  });
+  var sorted = filtered.slice().sort(function(a, b) {
+    switch (state.sortBy) {
+      case "date-desc": return (b.date || "").localeCompare(a.date || "");
+      case "date-asc": return (a.date || "").localeCompare(b.date || "");
+      case "customer-asc": return a.customer.localeCompare(b.customer);
+      case "customer-desc": return b.customer.localeCompare(a.customer);
+      case "status": var ord = {Open:0,"In Progress":1,Complete:2}; return (ord[deriveOrderStatus(a.items)] || 0) - (ord[deriveOrderStatus(b.items)] || 0);
+      case "items-desc": return b.items.length - a.items.length;
+      case "factory": return getPrimaryFactory(a).localeCompare(getPrimaryFactory(b));
+      default: return 0;
+    }
+  });
+  var selCount = Object.keys(state.selectedItems).length;
+  var totalItems = active.reduce(function(s, o) { return s + o.items.length; }, 0);
+  var doneItems = active.reduce(function(s, o) { return s + o.items.filter(function(i) { return i.status === state.statuses[state.statuses.length - 1]; }).length; }, 0);
+  var userName = (currentAccount && currentAccount.name) || "Demo User";
+
+  var h = '<div class="header"><div class="header-inner"><div><div class="header-title">Order Tracker</div><div class="header-sub">' + active.length + ' orders - ' + totalItems + ' items - ' + doneItems + ' complete</div></div><div class="header-actions">';
+  h += '<input class="input" type="text" placeholder="Search..." value="' + esc(state.searchTerm) + '" oninput="state.searchTerm=this.value;render()" style="width:150px">';
+  h += '<select class="select" onchange="state.sortBy=this.value;render()">';
+  h += '<option value="date-desc"' + (state.sortBy==="date-desc"?" selected":"") + '>Newest</option>';
+  h += '<option value="date-asc"' + (state.sortBy==="date-asc"?" selected":"") + '>Oldest</option>';
+  h += '<option value="customer-asc"' + (state.sortBy==="customer-asc"?" selected":"") + '>Customer A-Z</option>';
+  h += '<option value="customer-desc"' + (state.sortBy==="customer-desc"?" selected":"") + '>Customer Z-A</option>';
+  h += '<option value="status"' + (state.sortBy==="status"?" selected":"") + '>By Status</option>';
+  h += '<option value="items-desc"' + (state.sortBy==="items-desc"?" selected":"") + '>Most Items</option>';
+  h += '<option value="factory"' + (state.sortBy==="factory"?" selected":"") + '>By Factory</option></select>';
+  h += '<div class="view-toggle"><button class="' + (state.view==="active"?"active":"") + '" onclick="state.view=\'active\';state.expandedOrder=null;render()">Active</button>';
+  h += '<button class="' + (state.view==="archived"?"active":"") + '" onclick="state.view=\'archived\';state.expandedOrder=null;render()">Archived' + (archived.length ? " (" + archived.length + ")" : "") + '</button></div>';
+  h += '<button class="btn" onclick="state.modal=\'settings\';state.modalData={tab:\'statuses\'};render()">&#9881;</button>';
+  h += '<button class="btn" onclick="state.modal=\'import\';state.modalData={step:\'upload\'};render()">Import</button>';
+  h += '<button class="btn btn-primary" onclick="state.modal=\'newOrder\';state.modalData={customer:\'\',notes:\'\'};render()">+ Order</button>';
+  h += '<span class="user-info" onclick="' + (demoMode ? "" : "logout()") + '" title="' + (demoMode ? "Demo Mode" : "Click to sign out") + '">' + esc(userName) + '</span>';
+  h += '</div></div></div>';
+
+  if (demoMode) h += '<div class="demo-banner"><strong>Demo Mode</strong> - data is not saved. <a href="#" onclick="location.reload();return false">Reload to connect to SharePoint</a></div>';
+
+  if (selCount > 0) {
+    h += '<div class="bulk-bar"><div class="bulk-inner"><span class="bulk-label">' + selCount + ' selected</span><div style="display:flex;gap:4px">';
+    state.statuses.forEach(function(st) { h += '<button class="bulk-btn" onclick="bulkUpdateStatus(\'' + esc(st) + '\')">&rarr; ' + esc(st) + '</button>'; });
+    h += '</div><button class="bulk-clear" onclick="state.selectedItems={};render()">Clear</button></div></div>';
+  }
+
+  h += '<div class="container">';
+  if (state.loading) {
+    h += '<div style="text-align:center;padding:60px;color:#94A3B8"><span class="spinner"></span>Loading...</div>';
+  } else if (state.error) {
+    h += '<div style="text-align:center;padding:60px;color:#EF4444;font-size:14px">' + esc(state.error) + '<br><br><button class="btn btn-primary" onclick="loadData()">Retry</button> <button class="btn" onclick="enterDemoMode()">Demo Mode</button></div>';
+  } else if (sorted.length === 0) {
+    h += '<div style="text-align:center;padding:60px;color:#94A3B8;font-size:14px">' + (state.view === "archived" ? "No archived orders" : "No orders found") + '</div>';
+  } else {
+    sorted.forEach(function(order) {
+      var isOpen = state.expandedOrder === order.id;
+      var oS = deriveOrderStatus(order.items);
+      var oC = orderStatusColor(oS);
+      var allSel = order.items.length > 0 && order.items.every(function(i) { return state.selectedItems[i.id]; });
+      h += '<div class="order-card ' + (isOpen ? "expanded" : "") + '"><div class="order-header" onclick="state.expandedOrder=state.expandedOrder===\'' + order.id + '\'?null:\'' + order.id + '\';render()">';
+      h += '<div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1"><span class="order-chevron ' + (isOpen ? "open" : "") + '">&#8250;</span><div style="min-width:0">';
+      h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="order-id">' + esc(order.id) + '</span><span class="order-customer">' + esc(order.customer) + '</span></div>';
+      h += '<div class="order-meta">' + order.items.length + ' item' + (order.items.length !== 1 ? "s" : "") + ' - ' + esc(order.date);
+      if (order.archived && order.archivedDate) h += ' - <span style="color:#6366F1">Archived ' + esc(order.archivedDate) + '</span>';
+      var pf = getPrimaryFactory(order); if (pf) h += ' - ' + esc(pf);
+      h += '</div></div></div>';
+      h += '<span class="badge" style="background:' + oC + '18;color:' + oC + '"><span class="badge-dot" style="background:' + oC + '"></span>' + oS + '</span></div>';
+
+      if (isOpen) {
+        h += '<div style="border-top:1px solid #F1F5F9">';
+        if (order.notes) h += '<div class="order-notes">' + esc(order.notes) + '</div>';
+        if (order.items.length > 0 && state.view === "active") h += '<div class="select-all"><input type="checkbox" class="checkbox" ' + (allSel ? "checked" : "") + ' onchange="toggleSelectAll(\'' + order.id + '\')"><label onclick="toggleSelectAll(\'' + order.id + '\')">Select all</label></div>';
+        if (!order.items.length) h += '<div style="padding:20px 16px;text-align:center;color:#CBD5E1;font-size:12px">No items yet</div>';
+
+        order.items.forEach(function(item) {
+          var sC = getStatusColor(item.status);
+          var isSel = !!state.selectedItems[item.id];
+          h += '<div class="item-row ' + (isSel ? "selected" : "") + '">';
+          if (state.view === "active") h += '<input type="checkbox" class="checkbox" ' + (isSel ? "checked" : "") + ' onchange="toggleSelectItem(\'' + order.id + '\',\'' + item.id + '\')">';
+          h += '<div class="item-thumb" onclick="document.getElementById(\'img_' + item.spId + '\').click()" style="cursor:pointer" title="Click to upload image">';
+        if (item.image) {
+          h += '<img src="' + item.image + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px">';
+        } else {
+          h += '<span style="font-size:13px;opacity:0.3">&#128230;</span>';
+        }
+        h += '</div>';
+        h += '<input type="file" id="img_' + item.spId + '" accept="image/*" style="display:none" onchange="handleItemImageUpload(' + item.spId + ',this)">';
+          h += '<div class="item-info"><div class="item-name">' + esc(item.name) + '</div><div class="item-desc">' + esc(item.description) + '</div></div>';
+          h += '<div class="item-units" onclick="startEditUnits(event,\'' + item.id + '\',' + item.spId + ',' + item.units + ')">' + item.units.toLocaleString() + '<div class="item-units-label">units</div></div>';
+          if (state.view === "active") {
+            h += '<select class="item-select" style="color:' + (item.factory ? "#475569" : "#94A3B8") + '" onchange="updateItemData(' + item.spId + ',{Factory:this.value})"><option value="">Factory</option>';
+            state.factories.forEach(function(f) { h += '<option value="' + esc(f) + '"' + (item.factory === f ? " selected" : "") + '>' + esc(f) + '</option>'; });
+            h += '</select>';
+            h += '<select class="item-status" style="color:' + sC + ';background:' + sC + '18;border-color:' + sC + '30" onchange="updateItemData(' + item.spId + ',{Status:this.value})">';
+            state.statuses.forEach(function(st) { h += '<option value="' + esc(st) + '"' + (item.status === st ? " selected" : "") + '>' + esc(st) + '</option>'; });
+            h += '</select>';
+            h += '<button class="item-delete" onclick="confirmDeleteItem(' + item.spId + ',\'' + esc(item.name).replace(/'/g, "\\'") + '\')">x</button>';
+          }
+          h += '</div>';
+        });
+
+        h += '<div class="order-actions">';
+        if (state.view === "active") {
+          h += '<button class="btn btn-dashed btn-sm" onclick="state.modal=\'addItem\';state.modalData={orderId:\'' + order.id + '\',name:\'\',desc:\'\',units:\'\'};render()">+ Add Item</button>';
+          h += '<div style="display:flex;gap:6px"><button class="btn btn-sm btn-archive" onclick="archiveOrderSP(state.orders.find(function(o){return o.id===\'' + order.id + '\'}))">Archive</button>';
+          h += '<button class="btn btn-sm btn-danger" onclick="confirmDeleteOrder(\'' + order.id + '\')">Delete</button></div>';
+        } else {
+          h += '<div style="display:flex;gap:6px"><button class="btn btn-sm btn-restore" onclick="restoreOrderSP(state.orders.find(function(o){return o.id===\'' + order.id + '\'}))">Restore</button>';
+          h += '<button class="btn btn-sm btn-danger" onclick="confirmDeleteOrder(\'' + order.id + '\')">Delete</button></div>';
+        }
+        h += '</div></div>';
+      }
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+
+  // -- MODALS --
+  if (state.modal === "newOrder") {
+    var d = state.modalData;
+    h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body">';
+    h += '<div class="modal-title">New Order</div><div class="modal-sub">Create an order, then add items</div>';
+    h += '<div class="field"><label class="field-label">Customer <span style="color:#EF4444">*</span></label><input class="field-input" value="' + esc(d.customer) + '" oninput="state.modalData.customer=this.value" placeholder="e.g. Acme Manufacturing"></div>';
+    h += '<div class="field"><label class="field-label">Notes</label><textarea class="field-input" rows="2" oninput="state.modalData.notes=this.value" placeholder="Special instructions...">' + esc(d.notes) + '</textarea></div>';
+    h += '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitNewOrder()">Create</button></div>';
+    h += '</div></div></div>';
+  } else if (state.modal === "addItem") {
+    var d = state.modalData;
+    var ord = state.orders.find(function(o) { return o.id === d.orderId; });
+    h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body">';
+    h += '<div class="modal-title">Add Item</div><div class="modal-sub">to ' + (ord ? esc(ord.customer) : "") + '</div>';
+    h += '<div class="field"><label class="field-label">Item Name <span style="color:#EF4444">*</span></label><input class="field-input" value="' + esc(d.name) + '" oninput="state.modalData.name=this.value" placeholder="e.g. Hydraulic Cylinders"></div>';
+    h += '<div class="field"><label class="field-label">Description</label><input class="field-input" value="' + esc(d.desc) + '" oninput="state.modalData.desc=this.value" placeholder="Specs..."></div>';
+    h += '<div class="field"><label class="field-label">Units <span style="color:#EF4444">*</span></label><input class="field-input" type="number" value="' + esc(d.units) + '" oninput="state.modalData.units=this.value" placeholder="0"></div>';
+    h += '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitNewItem()">Add</button></div>';
+    h += '</div></div></div>';
+  } else if (state.modal === "settings") {
+    var tab = state.modalData.tab || "statuses";
+    var list = tab === "statuses" ? state.statuses : state.factories;
+    h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body">';
+    h += '<div class="modal-title">Settings</div>';
+    h += '<div class="tab-bar"><button class="tab-btn ' + (tab === "statuses" ? "active" : "") + '" onclick="state.modalData.tab=\'statuses\';render()">Statuses</button>';
+    h += '<button class="tab-btn ' + (tab === "factories" ? "active" : "") + '" onclick="state.modalData.tab=\'factories\';render()">Factories</button></div>';
+    if (tab === "statuses") h += '<div style="font-size:11px;color:#94A3B8;margin-bottom:10px">First = default. Last = complete.</div>';
+    list.forEach(function(v, i) {
+      h += '<div class="settings-item"><div style="display:flex;align-items:center;gap:8px">';
+      if (tab === "statuses") h += '<span style="width:8px;height:8px;border-radius:50%;background:' + SC[i % SC.length] + ';display:inline-block"></span>';
+      h += '<span style="font-size:13px;color:#1E293B">' + esc(v) + '</span></div>';
+      h += '<button class="item-delete" onclick="removeSetting(\'' + tab + '\',\'' + esc(v) + '\')">x</button></div>';
+    });
+    h += '<div style="display:flex;gap:8px;margin-top:12px"><input class="field-input" id="newSettingVal" placeholder="New ' + (tab === "statuses" ? "status" : "factory") + '" onkeydown="if(event.key===\'Enter\')addSetting(\'' + tab + '\')">';
+    h += '<button class="btn btn-primary" onclick="addSetting(\'' + tab + '\')">Add</button></div>';
+    h += '</div></div></div>';
+  } else if (state.modal === "confirm") {
+    h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body">';
+    h += '<div style="font-size:15px;font-weight:700;color:#0F172A;margin-bottom:6px">Are you sure?</div>';
+    h += '<div style="font-size:13px;color:#64748B;margin-bottom:20px">' + (state.modalData.message || "") + '</div>';
+    h += '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>';
+    h += '<button class="btn" style="background:#EF4444;color:#fff;border:none" onclick="state.modalData.onConfirm();closeModal()">Delete</button></div>';
+    h += '</div></div></div>';
+  } else if (state.modal === "import") {
+    var d = state.modalData;
+    if (d.step === "upload") {
+      h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal wide" onclick="event.stopPropagation()"><div class="modal-body">';
+      h += '<div class="modal-title">Import Spreadsheet</div><div class="modal-sub">Upload a file</div>';
+      h += '<div class="dropzone" onclick="document.getElementById(\'impFile\').click()" ondrop="handleImportDrop(event)" ondragover="event.preventDefault()">';
+      h += '<div style="font-size:32px;margin-bottom:6px">&#128196;</div><div style="font-size:14px;font-weight:600;color:#475569">Drop file or click to browse</div>';
+      h += '<div style="font-size:12px;color:#94A3B8;margin-top:4px">.xlsx, .xls, .csv</div></div>';
+      h += '<input type="file" id="impFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImportFile(this.files[0]);this.value=\'\';">';
+      if (d.error) h += '<div class="error-banner">' + esc(d.error) + '</div>';
+      h += '</div></div></div>';
+    } else if (d.step === "map") {
+      var lb = {name:"Item Name",description:"Description",units:"Qty / Units"};
+      h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal wide" onclick="event.stopPropagation()"><div class="modal-body">';
+      h += '<div class="modal-title">Import Spreadsheet</div><div class="modal-sub">Verify mapping</div>';
+      h += '<div class="success-banner">' + d.rows.length + ' rows from <strong>' + esc(d.fileName) + '</strong></div>';
+      ["name","description","units"].forEach(function(f) {
+        h += '<div class="map-row"><div class="map-label">' + lb[f] + (f === "name" ? ' <span style="color:#EF4444">*</span>' : "") + (d.mapping[f] ? '<span style="color:#10B981;margin-left:4px">&#10003;</span>' : "") + '</div>';
+        h += '<select class="map-select ' + (d.mapping[f] ? "mapped" : "") + '" onchange="state.modalData.mapping.' + f + '=this.value;render()"><option value="">-- Skip --</option>';
+        d.columns.forEach(function(c) { h += '<option value="' + esc(c) + '"' + (d.mapping[f] === c ? " selected" : "") + '>' + esc(c) + '</option>'; });
+        h += '</select></div>';
+      });
+      h += '<div style="border-top:1px solid #F1F5F9;margin-top:14px;padding-top:14px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Customer <span style="color:#EF4444">*</span></div>';
+      h += '<div style="display:flex;gap:8px;margin-bottom:8px"><button class="tab-btn ' + (!d.useCol ? "active" : "") + '" onclick="state.modalData.useCol=false;render()">Type it in</button>';
+      h += '<button class="tab-btn ' + (d.useCol ? "active" : "") + '" onclick="state.modalData.useCol=true;render()">From column</button></div>';
+      if (d.useCol) {
+        h += '<select class="map-select ' + (d.mapping.customer ? "mapped" : "") + '" style="width:100%" onchange="state.modalData.mapping.customer=this.value;render()"><option value="">-- Select --</option>';
+        d.columns.forEach(function(c) { h += '<option value="' + esc(c) + '"' + (d.mapping.customer === c ? " selected" : "") + '>' + esc(c) + '</option>'; });
+        h += '</select>';
+      } else {
+        h += '<input class="field-input" value="' + esc(d.customerName || "") + '" oninput="state.modalData.customerName=this.value" placeholder="Customer name (required)">';
+      }
+      var hasCustomer = d.useCol ? !!d.mapping.customer : !!(d.customerName && d.customerName.trim());
+      var hasName = !!d.mapping.name;
+      var canPreview = hasCustomer && hasName;
+      h += '</div><div class="modal-actions"><button class="btn" onclick="state.modalData.step=\'upload\';render()">Back</button>';
+      h += '<button class="btn btn-primary" ' + (canPreview ? "" : "disabled style=\"background:#E2E8F0;color:#94A3B8;cursor:not-allowed\"") + ' onclick="' + (canPreview ? "state.modalData.step='preview';render()" : "") + '">Preview</button></div>';
+      h += '</div></div></div>';
+    } else if (d.step === "preview") {
+      h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal wide" onclick="event.stopPropagation()"><div class="modal-body">';
+      h += '<div class="modal-title">Import Spreadsheet</div><div class="modal-sub">Preview</div>';
+      h += '<div style="border-radius:10px;border:1px solid #E2E8F0;overflow:auto;margin-bottom:14px"><table class="preview-table"><thead><tr><th>Customer</th><th>Item</th><th>Description</th><th style="text-align:right">Units</th></tr></thead><tbody>';
+      d.rows.slice(0, 5).forEach(function(row) {
+        var cust = d.useCol && d.mapping.customer ? String(row[d.mapping.customer] || "") : (d.customerName || "");
+        h += '<tr><td style="color:#1E293B;font-weight:500">' + (esc(cust) || "-") + '</td>';
+        h += '<td style="color:#1E293B;font-weight:500">' + (d.mapping.name ? esc(String(row[d.mapping.name] || "")) || "-" : "-") + '</td>';
+        h += '<td style="color:#94A3B8;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (d.mapping.description ? esc(String(row[d.mapping.description] || "")) || "-" : "-") + '</td>';
+        h += '<td style="color:#1E293B;font-weight:600;text-align:right">' + (d.mapping.units ? (parseInt(row[d.mapping.units]) || 0) : "-") + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+      h += '<div style="font-size:12px;color:#64748B;margin-bottom:14px">' + d.rows.length + ' items. All start as "' + state.statuses[0] + '".</div>';
+      h += '<div class="modal-actions"><button class="btn" onclick="state.modalData.step=\'map\';render()">Back</button>';
+      h += '<button class="btn btn-primary" onclick="submitImport()">Import ' + d.rows.length + ' Items</button></div>';
+      h += '</div></div></div>';
+    }
+  }
+
+  app.innerHTML = h;
+}
+
+// -- EVENT HANDLERS --
+function closeModal() { state.modal = null; state.modalData = {}; render(); }
+function submitNewOrder() { var d = state.modalData; if (!d.customer) return; closeModal(); createOrder(d.customer, d.notes); }
+function submitNewItem() { var d = state.modalData; if (!d.name || !d.units) return; closeModal(); createItem(d.orderId, d.name, d.desc, parseInt(d.units)); }
+function toggleSelectItem(oid, iid) { if (state.selectedItems[iid]) delete state.selectedItems[iid]; else state.selectedItems[iid] = oid; render(); }
+function toggleSelectAll(oid) { var o = state.orders.find(function(o) { return o.id === oid; }); if (!o) return; var all = o.items.every(function(i) { return state.selectedItems[i.id]; }); o.items.forEach(function(i) { if (all) delete state.selectedItems[i.id]; else state.selectedItems[i.id] = oid; }); render(); }
+function startEditUnits(e, iid, spId, val) { e.stopPropagation(); var el = e.currentTarget; el.innerHTML = '<input class="item-units-input" type="number" value="' + val + '" onblur="commitUnits(this,' + spId + ',' + val + ')" onkeydown="if(event.key===\'Enter\')this.blur();if(event.key===\'Escape\'){this.value=' + val + ';this.blur();}">'; el.querySelector("input").focus(); }
+function commitUnits(input, spId, old) { var v = parseInt(input.value); if (!isNaN(v) && v >= 0 && v !== old) updateItemData(spId, { Units: v }); else render(); }
+function confirmDeleteItem(spId, name) { state.modal = "confirm"; state.modalData = { message: 'Delete "' + name + '"? This cannot be undone.', onConfirm: function() { deleteItemSP(spId); } }; render(); }
+function confirmDeleteOrder(oid) { var o = state.orders.find(function(o) { return o.id === oid; }); state.modal = "confirm"; state.modalData = { message: "Delete " + oid + " (" + o.customer + ") and all items?", onConfirm: function() { deleteOrderSP(o); } }; render(); }
+function addSetting(tab) { var input = document.getElementById("newSettingVal"); var v = input.value.trim(); if (!v) return; if (tab === "statuses" && state.statuses.indexOf(v) < 0) state.statuses.push(v); if (tab === "factories" && state.factories.indexOf(v) < 0) state.factories.push(v); input.value = ""; render(); }
+function removeSetting(tab, val) { if (tab === "statuses") { if (state.statuses.length > 1) state.statuses = state.statuses.filter(function(s) { return s !== val; }); } else state.factories = state.factories.filter(function(f) { return f !== val; }); render(); }
+function handleImportDrop(e) { e.preventDefault(); handleImportFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]); }
+// Extract images from xlsx zip and map to row numbers
+function extractImagesFromXlsx(arrayBuffer) {
+  return new Promise(function(resolve) {
+    try {
+      var zip = XLSX.utils.cfb_new ? null : null;
+      // Use JSZip via XLSX internal zip reader
+      var data = new Uint8Array(arrayBuffer);
+      // XLSX exposes zip reading — parse the xlsx as a zip manually
+      var rowImages = {};
+      // Read the zip structure
+      var wb = XLSX.read(data, { type: "array", cellDates: true });
+      var sheetName = wb.SheetNames[0];
+
+      // Access the raw zip via XLSX's internal structure
+      // xlsx stores the cfb/zip as wb.Workbook parent
+      // We need to use XLSX.utils to access the zip
+      // Try to get the raw bytes and parse as zip
+      if (typeof JSZip !== 'undefined') {
+        JSZip.loadAsync(arrayBuffer).then(function(zip) {
+          // Find drawing XML to get anchor info
+          var drawingFiles = Object.keys(zip.files).filter(function(f) { return f.match(/xl\/drawings\/drawing\d+\.xml/); });
+          var mediaFiles = {};
+          Object.keys(zip.files).forEach(function(f) { if (f.match(/xl\/media\//)) mediaFiles[f] = zip.files[f]; });
+
+          if (drawingFiles.length === 0) { resolve({}); return; }
+
+          // Parse drawing XML for anchor rows
+          zip.files[drawingFiles[0]].async("string").then(function(xml) {
+            // Find all oneCellAnchor elements and extract row + image ref
+            var anchors = xml.match(/<xdr:oneCellAnchor>[\s\S]*?<\/xdr:oneCellAnchor>/g) || [];
+            var relFile = drawingFiles[0].replace("drawings/drawing", "drawings/_rels/drawing").replace(".xml", ".xml.rels");
+            zip.files[relFile].async("string").then(function(relsXml) {
+              var relMap = {};
+              var relMatches = relsXml.match(/Id="([^"]+)"[^>]+Target="([^"]+)"/g) || [];
+              relMatches.forEach(function(rel) {
+                var id = rel.match(/Id="([^"]+)"/)[1];
+                var target = rel.match(/Target="([^"]+)"/)[1];
+                relMap[id] = target;
+              });
+
+              var imagePromises = anchors.map(function(anchor) {
+                var rowMatch = anchor.match(/<xdr:row>(\d+)<\/xdr:row>/);
+                var rIdMatch = anchor.match(/r:id="([^"]+)"/);
+                if (!rowMatch || !rIdMatch) return Promise.resolve(null);
+                var anchorRow = parseInt(rowMatch[1]); // 0-indexed
+                var dataRow = anchorRow + 2; // shift to 1-indexed data row
+                var rId = rIdMatch[1];
+                var mediaPath = relMap[rId];
+                if (!mediaPath) return Promise.resolve(null);
+                // Normalize path
+                var fullPath = "xl/media/" + mediaPath.replace("../media/", "");
+                if (!zip.files[fullPath]) return Promise.resolve(null);
+                return zip.files[fullPath].async("base64").then(function(b64) {
+                  var mime = fullPath.match(/\.png$/i) ? "image/png" : "image/jpeg";
+                  return { row: dataRow, src: "data:" + mime + ";base64," + b64 };
+                });
+              });
+
+              Promise.all(imagePromises).then(function(results) {
+                results.forEach(function(r) { if (r) rowImages[r.row] = r.src; });
+                console.log("Extracted " + Object.keys(rowImages).length + " images from xlsx");
+                resolve(rowImages);
+              });
+            }).catch(function() { resolve({}); });
+          }).catch(function() { resolve({}); });
+        }).catch(function() { resolve({}); });
+      } else {
+        resolve({});
+      }
+    } catch(e) {
+      console.warn("Image extraction failed:", e);
+      resolve({});
+    }
+  });
+}
+
+function handleImportFile(file) {
+  if (!file) return;
+  if (/\.(csv|tsv)$/i.test(file.name)) {
+    Papa.parse(file, { header: true, skipEmptyLines: true, complete: function(r) { if (r.data && r.data.length) proceedToMap(file.name, Object.keys(r.data[0]), r.data, {}); else { state.modalData.error = "No data"; render(); } }, error: function() { state.modalData.error = "Could not read file"; render(); } });
+  } else {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var arrayBuffer = e.target.result;
+        var wb = XLSX.read(new Uint8Array(arrayBuffer), { type: "array" });
+        var json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+        if (!json.length) { state.modalData.error = "No data"; render(); return; }
+        // Try to extract images
+        extractImagesFromXlsx(arrayBuffer).then(function(rowImages) {
+          // Attach images to rows (json index 0 = data row 2)
+          json.forEach(function(row, idx) {
+            var dataRow = idx + 2;
+            row._image = rowImages[dataRow] || null;
+          });
+          proceedToMap(file.name, Object.keys(json[0]).filter(function(k) { return k !== "_image"; }), json, rowImages);
+        });
+      } catch(ex) { state.modalData.error = "Could not read file"; render(); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+function proceedToMap(fn, cols, rows, rowImages) { var m = autoMap(cols); state.modalData = { step: "map", fileName: fn, columns: cols, rows: rows, rowImages: rowImages || {}, mapping: m, useCol: !!m.customer, customerName: "" }; render(); }
+function submitImport() {
+  var d = state.modalData; var grouped = {};
+  d.rows.forEach(function(r) {
+    var c = d.useCol && d.mapping.customer ? String(r[d.mapping.customer] || "Unknown") : (d.customerName || "Imported");
+    if (!grouped[c]) grouped[c] = [];
+    grouped[c].push({
+      name: d.mapping.name ? String(r[d.mapping.name] || "Unnamed") : "Unnamed",
+      description: d.mapping.description ? String(r[d.mapping.description] || "") : "",
+      units: d.mapping.units ? parseInt(r[d.mapping.units]) || 0 : 0,
+      image: r._image || null
+    });
+  });
+  closeModal();
+  var ordersData = [];
+  for (var c in grouped) ordersData.push({ customer: c, notes: "Imported from " + d.fileName, items: grouped[c] });
+  importOrders(ordersData);
+}
+
+// -- IMAGE UPLOAD FOR MANUAL ITEM EDIT --
+function handleItemImageUpload(spId, fileInput) {
+  var file = fileInput.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = e.target.result;
+    if (demoMode) {
+      // Just store locally in demo mode
+      state.orders = state.orders.map(function(o) {
+        return Object.assign({}, o, { items: o.items.map(function(i) {
+          return i.spId === spId ? Object.assign({}, i, { image: base64 }) : i;
+        })});
+      });
+      render(); return;
+    }
+    // Upload to SharePoint
+    var itemId = null;
+    state.orders.forEach(function(o) { o.items.forEach(function(i) { if (i.spId === spId) itemId = i.id; }); });
+    uploadImageToSP(base64, itemId || ("item_" + spId)).then(function(imageUrl) {
+      return updateItemData(spId, { ImageURL: imageUrl });
+    }).then(function() {
+      loadData();
+    }).catch(function(err) {
+      console.error("Image upload failed:", err);
+      alert("Image upload failed: " + err.message);
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+// -- INIT --
+initAuth();
+</script>
+</body>
+</html>
