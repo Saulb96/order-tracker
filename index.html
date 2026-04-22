@@ -462,7 +462,7 @@ function createItem(orderId, name, desc, units, brand, masterInner) {
   if (demoMode) {
     var id = "ITM-" + String(demoIdCounter.item++).padStart(3, "0");
     state.orders = state.orders.map(function(o) {
-      return o.id === orderId ? Object.assign({}, o, { items: o.items.concat([{ spId: Date.now(), id: id, name: name, description: desc || "", units: units || 0, status: state.statuses[0], image: null, factory: "" }]) }) : o;
+      return o.id === orderId ? Object.assign({}, o, { items: o.items.concat([{ spId: Date.now(), id: id, name: name, description: desc || "", units: units || 0, Status: state.statuses[0], image: null, Factory: "" }]) }) : o;
     });
     render(); return;
   }
@@ -477,7 +477,7 @@ function updateItemData(spId, data) {
         if (i.spId !== spId) return i;
         var u = Object.assign({}, i);
         if (data.Units !== undefined) u.units = data.Units;
-        if (data.Status) u.status = data.Status;
+        if (data.Status) u.Status = data.Status;
         if (data.Factory !== undefined) u.factory = data.Factory;
         return u;
       })});
@@ -523,7 +523,7 @@ function restoreOrderSP(order) {
 
 function bulkUpdateStatus(newStatus) {
   if (demoMode) {
-    state.orders = state.orders.map(function(o) { return Object.assign({}, o, { items: o.items.map(function(i) { return state.selectedItems[i.id] ? Object.assign({}, i, { status: newStatus }) : i; }) }); });
+    state.orders = state.orders.map(function(o) { return Object.assign({}, o, { items: o.items.map(function(i) { return state.selectedItems[i.id] ? Object.assign({}, i, { Status: newStatus }) : i; }) }); });
     state.selectedItems = {}; render(); return;
   }
   var promises = [];
@@ -535,7 +535,7 @@ function importOrders(ordersData) {
   if (demoMode) {
     ordersData.forEach(function(o) {
       var id = "ORD-" + String(demoIdCounter.order++).padStart(3, "0");
-      var items = o.items.map(function(it) { return { spId: Date.now() + Math.random(), id: "ITM-" + String(demoIdCounter.item++).padStart(3, "0"), name: it.name, description: it.description || "", units: it.units || 0, status: state.statuses[0], image: null, factory: "" }; });
+      var items = o.items.map(function(it) { return { spId: Date.now() + Math.random(), id: "ITM-" + String(demoIdCounter.item++).padStart(3, "0"), name: it.name, description: it.description || "", units: it.units || 0, Status: state.statuses[0], image: null, factory: "" }; });
       state.orders.unshift({ spId: Date.now(), id: id, customer: o.customer, submittedBy: "User", date: new Date().toISOString().split("T")[0], notes: o.notes || "", archived: false, archivedDate: null, items: items });
     });
     if (state.orders.length) state.expandedOrder = state.orders[0].id;
@@ -586,16 +586,16 @@ function importOrders(ordersData) {
 // -- DEMO DATA --
 var DEMO_DATA = [
   {spId:1,id:"ORD-001",customer:"Acme Manufacturing",submittedBy:"M. Reynolds",date:"2026-03-15",notes:"Urgent - production line B down",archived:false,archivedDate:null,items:[
-    {spId:1,id:"ITM-001",name:"Industrial Bearings",description:"SKF 6205-2RS deep groove",units:250,status:"Received",image:null,factory:"Factory A"},
-    {spId:2,id:"ITM-002",name:"Bearing Housings",description:"Cast iron pillow block 25mm",units:250,status:"Shipped",image:null,factory:"Factory A"},
-    {spId:3,id:"ITM-003",name:"Lubricant Cartridges",description:"High-temp lithium grease",units:48,status:"Ordered",image:null,factory:"Factory B"}
+    {spId:1,id:"ITM-001",name:"Industrial Bearings",description:"SKF 6205-2RS deep groove",units:250,Status:"Received",image:null,factory:"Factory A"},
+    {spId:2,id:"ITM-002",name:"Bearing Housings",description:"Cast iron pillow block 25mm",units:250,Status:"Shipped",image:null,factory:"Factory A"},
+    {spId:3,id:"ITM-003",name:"Lubricant Cartridges",description:"High-temp lithium grease",units:48,Status:"Ordered",image:null,factory:"Factory B"}
   ]},
   {spId:2,id:"ORD-002",customer:"Delta Logistics",submittedBy:"M. Reynolds",date:"2026-03-22",notes:"",archived:false,archivedDate:null,items:[
-    {spId:4,id:"ITM-004",name:"Hydraulic Cylinders",description:"3in bore x 18in stroke",units:12,status:"Ordered",image:null,factory:"Overseas Plant 1"},
-    {spId:5,id:"ITM-005",name:"Hydraulic Hoses",description:"1/2in braided steel 6ft",units:24,status:"Pending",image:null,factory:""}
+    {spId:4,id:"ITM-004",name:"Hydraulic Cylinders",description:"3in bore x 18in stroke",units:12,Status:"Ordered",image:null,factory:"Overseas Plant 1"},
+    {spId:5,id:"ITM-005",name:"Hydraulic Hoses",description:"1/2in braided steel 6ft",units:24,Status:"Pending",image:null,factory:""}
   ]},
   {spId:3,id:"ORD-003",customer:"FreshPack Foods",submittedBy:"M. Reynolds",date:"2026-03-30",notes:"FDA food-grade required",archived:false,archivedDate:null,items:[
-    {spId:6,id:"ITM-006",name:"Conveyor Belt Sections",description:"24in PVC FDA grade",units:8,status:"Pending",image:null,factory:""}
+    {spId:6,id:"ITM-006",name:"Conveyor Belt Sections",description:"24in PVC FDA grade",units:8,Status:"Pending",image:null,factory:""}
   ]}
 ];
 
@@ -886,7 +886,7 @@ function addSetting(tab) {
   var v = input.value.trim();
   if (!v) return;
 
-  var type = (tab === "statuses") ? "status" : "factory";
+  var type = (tab === "statuses") ? "Status" : "Factory";
 
   spCreateItem("AppSettings", {
     Type_x002e_: type,
@@ -899,7 +899,7 @@ function addSetting(tab) {
   });
 }
   function removeSetting(tab, val) {
-  var type = (tab === "statuses") ? "status" : "factory";
+  var type = (tab === "statuses") ? "Status" : "Factory";
 
   spGetItems("AppSettings").then(function(items) {
     var match = items.find(function(i) {
