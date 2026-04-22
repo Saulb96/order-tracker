@@ -509,18 +509,18 @@ function createItem(orderId, name, desc, units, brand, masterInner) {
     state.orders = state.orders.map(function (o) {
       if (o.id !== orderId) return o;
 
-      return Object.assign({}, o, {
-        items: o.items.concat([{
-          spId: Date.now(),
-          id: id,
-          name: name,
-          description: desc || "",
-          units: units || 0,
-          status: defaultStatus,,
-          image: null,
-          factory: ""
-        }])
-      });
+     return Object.assign({}, o, {
+  items: o.items.concat([{
+    spId: Date.now(),
+    id: id,
+    name: name,
+    description: desc || "",
+    units: units || 0,
+    status: defaultStatus,
+    image: null,
+    factory: ""
+  }])
+});
     });
 
     render();
@@ -534,16 +534,16 @@ function createItem(orderId, name, desc, units, brand, masterInner) {
   var itemId = "ITM-" + String(count).padStart(3, "0");
 
   spCreateItem(ITEMS_LIST, {
-    Title: itemId,
-    OrderID: orderId,
-    ItemName: name,
-    Description: desc || "",
-    Brand: brand || "",
-    MasterInner: masterInner || "",
-    Units: units || 0,
-    status: defaultStatus,
-    Factory: ""
-  }).then(function () {
+  Title: itemId,
+  OrderID: orderId,
+  ItemName: name,
+  Description: desc || "",
+  Brand: brand || "",
+  MasterInner: masterInner || "",
+  Units: units || 0,
+  Status: defaultStatus,
+  Factory: ""
+}).then(function () {
     loadData();
   });
 }
