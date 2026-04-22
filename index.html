@@ -889,10 +889,10 @@ function addSetting(tab) {
   var type = (tab === "statuses") ? "status" : "factory";
 
   spCreateItem("AppSettings", {
-    Title: v,
-    i.SettingType: type,
-    Value: v
-  }).then(function() {
+  Type_x002e_: "status",
+  Value: "x"
+});
+  then(function() {
     return loadSettings();
   }).then(function() {
     input.value = "";
