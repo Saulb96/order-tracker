@@ -516,7 +516,7 @@ function createItem(orderId, name, desc, units, brand, masterInner) {
           name: name,
           description: desc || "",
           units: units || 0,
-          status: var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";,
+          status: defaultStatus,,
           image: null,
           factory: ""
         }])
@@ -541,7 +541,7 @@ function createItem(orderId, name, desc, units, brand, masterInner) {
     Brand: brand || "",
     MasterInner: masterInner || "",
     Units: units || 0,
-    Status: var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";,
+    status: defaultStatus,
     Factory: ""
   }).then(function () {
     loadData();
