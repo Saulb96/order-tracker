@@ -576,9 +576,18 @@ var SC = ["#F59E0B","#3B82F6","#8B5CF6","#10B981","#EF4444","#EC4899","#14B8A6",
 function getStatusColor(s) { var i = state.statuses.indexOf(s); return SC[i >= 0 ? i % SC.length : 0]; }
 function deriveOrderStatus(items) {
   if (!items.length) return "Open";
+
+  var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";
   var last = state.statuses[state.statuses.length - 1];
-  if (items.every(function(i) { return i.status === last; })) return "Complete";
-  if (items.some(function(i) { return i.status !== var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";; })) return "In Progress";
+
+  if (items.every(function(i) { return i.status === last; })) {
+    return "Complete";
+  }
+
+  if (items.some(function(i) { return i.status !== defaultStatus; })) {
+    return "In Progress";
+  }
+
   return "Open";
 }
 function orderStatusColor(s) { return s === "Complete" ? "#10B981" : s === "In Progress" ? "#3B82F6" : "#F59E0B"; }
