@@ -384,7 +384,7 @@ function loadData() {
           brand: row.Brand || "",
           masterInner: row.MasterInner || "",
           units: row.Units || 0,
-          status: row.Status || state.statuses[0],
+          status: row.Status || var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";,
           factory: row.Factory || "",
           image: row.ImageURL || null
         });
@@ -420,10 +420,39 @@ function loadData() {
 
 // ---------------- SETTINGS ----------------
 
-function loadSettings() {
-  return spGetItems("AppSettings").then(function (items) {
+function loadSettings()
+function saveSetting(type, value) {
+  return spCreateItem("AppSettings", {
+    Title: value,
+    SettingType: type,
+    Value: value
+  });
+}{
+  return spGetItems("AppSettings").then(function(items) {
+
     state.statuses = [];
     state.factories = [];
+
+    items.forEach(function(i) {
+      if (i.SettingType === "status") {
+        state.statuses.push(i.Value);
+      }
+      if (i.SettingType === "factory") {
+        state.factories.push(i.Value);
+      }
+    });
+
+    // ✅ ADD THIS (prevents empty app / broken dropdowns)
+    if (!state.statuses.length) {
+      state.statuses = ["Open", "In Progress", "Complete"];
+    }
+
+    if (!state.factories.length) {
+      state.factories = ["Factory A"];
+    }
+
+  });
+}
 
     items.forEach(function (i) {
       if (i.SettingType === "status") {
@@ -498,7 +527,7 @@ function createItem(orderId, name, desc, units, brand, masterInner) {
           name: name,
           description: desc || "",
           units: units || 0,
-          status: state.statuses[0],
+          status: var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";,
           image: null,
           factory: ""
         }])
@@ -523,7 +552,7 @@ function createItem(orderId, name, desc, units, brand, masterInner) {
     Brand: brand || "",
     MasterInner: masterInner || "",
     Units: units || 0,
-    Status: state.statuses[0],
+    Status: var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";,
     Factory: ""
   }).then(function () {
     loadData();
@@ -560,7 +589,7 @@ function deriveOrderStatus(items) {
   if (!items.length) return "Open";
   var last = state.statuses[state.statuses.length - 1];
   if (items.every(function(i) { return i.status === last; })) return "Complete";
-  if (items.some(function(i) { return i.status !== state.statuses[0]; })) return "In Progress";
+  if (items.some(function(i) { return i.status !== var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";; })) return "In Progress";
   return "Open";
 }
 function orderStatusColor(s) { return s === "Complete" ? "#10B981" : s === "In Progress" ? "#3B82F6" : "#F59E0B"; }
@@ -801,7 +830,7 @@ function render() {
         h += '<td style="color:#1E293B;font-weight:600;text-align:right">' + (d.mapping.units ? (parseInt(row[d.mapping.units]) || 0) : "-") + '</td></tr>';
       });
       h += '</tbody></table></div>';
-      h += '<div style="font-size:12px;color:#64748B;margin-bottom:14px">' + d.rows.length + ' items. All start as "' + state.statuses[0] + '".</div>';
+      h += '<div style="font-size:12px;color:#64748B;margin-bottom:14px">' + d.rows.length + ' items. All start as "' + var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open"; + '".</div>';
       h += '<div class="modal-actions"><button class="btn" onclick="state.modalData.step=\'map\';render()">Back</button>';
       h += '<button class="btn btn-primary" onclick="submitImport()">Import ' + d.rows.length + ' Items</button></div>';
       h += '</div></div></div>';
@@ -833,31 +862,37 @@ function addSetting(tab) {
   var v = input.value.trim();
   if (!v) return;
 
-  var type = (tab === "statuses") ? "status" : "factory";
+  var list = tab === "statuses" ? state.statuses : state.factories;
+  var type = tab === "statuses" ? "status" : "factory";
 
-  spCreateItem("AppSettings", {
-    Title: v,
-    SettingType: type,
-    Value: v
-  }).then(function() {
-    return loadSettings();
-  }).then(function() {
+  if (list.indexOf(v) >= 0) return;
+
+  list.push(v);
+
+  saveSetting(type, v).then(function() {
     input.value = "";
     render();
   });
-}function removeSetting(tab, val) {
-  var type = (tab === "statuses") ? "status" : "factory";
+}
+function removeSetting(tab, val) {
+  var type = tab === "statuses" ? "status" : "factory";
+
+  var list = tab === "statuses" ? state.statuses : state.factories;
+
+  if (tab === "statuses" && list.length <= 1) return;
+
+  state[tab] = list.filter(function(v) {
+    return v !== val;
+  });
 
   spGetItems("AppSettings").then(function(items) {
     var match = items.find(function(i) {
-      return i.Value === val && i.SettingType === type;
+      return i.SettingType === type && i.Value === val;
     });
 
-    if (!match) return;
-
-    return spDeleteItem("AppSettings", match.Id);
-  }).then(function() {
-    return loadSettings();
+    if (match) {
+      return spDeleteItem("AppSettings", match.Id);
+    }
   }).then(function() {
     render();
   });
