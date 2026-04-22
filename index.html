@@ -1134,28 +1134,37 @@ function handleItemImageUpload(spId, fileInput) {
 
 // -- INIT --
 initAuth();
-// Attach change handler directly to the persistent file input
-var _fileInput = document.getElementById('importFileInput');
-if (_fileInput) {
-  _fileInput.onchange = function() {
-    console.log('File input change fired, files:', this.files);
-    if (this.files && this.files[0]) {
-      handleImportFile(this.files[0]);
-      this.value = '';
-    }
-  };
-}
-document.body.addEventListener('drop', function(e) {
-  if (e.target && (e.target.id === 'importDropZone' || e.target.closest('#importDropZone'))) {
+
+document.addEventListener("DOMContentLoaded", function () {
+
+  var fileInput = document.getElementById("importFileInput");
+
+  if (fileInput) {
+    fileInput.addEventListener("change", function () {
+      console.log("File input change fired, files:", this.files);
+
+      if (this.files && this.files[0]) {
+        handleImportFile(this.files[0]);
+        this.value = "";
+      }
+    });
+  }
+
+  document.body.addEventListener("drop", function (e) {
+    var zone = e.target && (e.target.id === "importDropZone" || e.target.closest("#importDropZone"));
+    if (!zone) return;
+
     e.preventDefault();
+
     var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (file) handleImportFile(file);
-  }
-});
-document.body.addEventListener('dragover', function(e) {
-  if (e.target && (e.target.id === 'importDropZone' || e.target.closest('#importDropZone'))) {
-    e.preventDefault();
-  }
+  });
+
+  document.body.addEventListener("dragover", function (e) {
+    var zone = e.target && (e.target.id === "importDropZone" || e.target.closest("#importDropZone"));
+    if (zone) e.preventDefault();
+  });
+
 });
 </script>
 </body>
