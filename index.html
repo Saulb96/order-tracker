@@ -889,16 +889,16 @@ function addSetting(tab) {
   var type = (tab === "statuses") ? "status" : "factory";
 
   spCreateItem("AppSettings", {
-  Type_x002e_: "status",
-  Value: "x"
-});
-  then(function() {
+    Type_x002e_: type,
+    Value: v
+  }).then(function() {
     return loadSettings();
   }).then(function() {
     input.value = "";
     render();
   });
-}function removeSetting(tab, val) {
+}
+  function removeSetting(tab, val) {
   var type = (tab === "statuses") ? "status" : "factory";
 
   spGetItems("AppSettings").then(function(items) {
