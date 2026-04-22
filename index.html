@@ -347,220 +347,187 @@ var state = {
 // -- DATA OPERATIONS --
 var demoIdCounter = { order: 4, item: 7 };
 
-function loadData()
+function loadData() {
+  state.loading = true;
+  state.error = null;
+  render();
+
+  if (demoMode) {
+    state.loading = false;
+    render();
+    return;
+  }
+
+  getToken()
+    .then(function () {
+      return Promise.all([
+        spGetItems(ORDERS_LIST),
+        spGetItems(ITEMS_LIST)
+      ]);
+    })
+    .then(function (results) {
+      var orderRows = results[0];
+      var itemRows = results[1];
+
+      var itemsByOrder = {};
+
+      itemRows.forEach(function (row) {
+        var oid = row.OrderID || row.Title || "";
+
+        if (!itemsByOrder[oid]) itemsByOrder[oid] = [];
+
+        itemsByOrder[oid].push({
+          spId: row.Id,
+          id: row.Title || "",
+          name: row.ItemName || "",
+          description: row.Description || "",
+          brand: row.Brand || "",
+          masterInner: row.MasterInner || "",
+          units: row.Units || 0,
+          status: row.Status || state.statuses[0],
+          factory: row.Factory || "",
+          image: row.ImageURL || null
+        });
+      });
+
+      state.orders = orderRows.map(function (row) {
+        var orderId = row.Title || "";
+
+        return {
+          spId: row.Id,
+          id: orderId,
+          customer: row.Customer || "",
+          submittedBy: row.SubmittedBy || "",
+          date: (row.Date || "").split("T")[0],
+          notes: row.Notes || "",
+          archived: !!row.Archived,
+          archivedDate: row.ArchivedDate ? row.ArchivedDate.split("T")[0] : null,
+          items: itemsByOrder[orderId] || []
+        };
+      });
+
+      state.loading = false;
+      render();
+    })
+    .catch(function (err) {
+      state.loading = false;
+      state.error = "Could not load from SharePoint. " + err.message;
+      console.error(err);
+      render();
+    });
+}
+
+
+// ---------------- SETTINGS ----------------
+
 function loadSettings() {
-  return spGetItems("AppSettings").then(function(items) {
+  return spGetItems("AppSettings").then(function (items) {
     state.statuses = [];
     state.factories = [];
 
-    items.forEach(function(i) {
+    items.forEach(function (i) {
       if (i.SettingType === "status") {
         state.statuses.push(i.Value);
       }
+
       if (i.SettingType === "factory") {
         state.factories.push(i.Value);
       }
     });
   });
-} {
-  state.loading = true; state.error = null; render();
-  if (demoMode) { state.loading = false; render(); return; }
-  getToken().then(function() {
-    // Log actual field names to help debug
-    spGetListFields(ORDERS_LIST).catch(function(e) { console.warn("Could not get Orders fields:", e); });
-    return Promise.all([spGetItems(ORDERS_LIST), spGetItems(ITEMS_LIST)]);
-  }).then(function(results) {
-    var orderRows = results[0], itemRows = results[1];
-
-    // Log first row to help debug field names
-    if (orderRows.length > 0) console.log("ORDER FIELDS:", Object.keys(orderRows[0]).filter(function(k) { return k.indexOf("__") !== 0 && k !== "__metadata"; }));
-    if (itemRows.length > 0) console.log("ITEM FIELDS:", Object.keys(itemRows[0]).filter(function(k) { return k.indexOf("__") !== 0 && k !== "__metadata"; }));
-
-    var itemsByOrder = {};
-    itemRows.forEach(function(row) {
-      // Try multiple possible field names for OrderID
-      var oid = row.OrderID || row.OrderID0 || row.Title || "";
-      if (!itemsByOrder[oid]) itemsByOrder[oid] = [];
-      itemsByOrder[oid].push({
-        spId: row.Id,
-        id: row.Title || row.ItemID || "",
-        name: row.ItemName || row.ItemName0 || "",
-        description: row.Description || row.Description0 || "",
-        brand: row.Brand || row.Brand0 || "",
-        masterInner: row.MasterInner || row.Master_Inner || "",
-        units: row.Units || row.Units0 || 0,
-        status: row.Status || row.Status0 || state.statuses[0],
-        factory: row.Factory || row.Factory0 || "",
-        image: row.ImageURL || (window._localImages && window._localImages[row.Id]) || null
-      });
-    });
-    state.orders = orderRows.map(function(row) {
-      // Try multiple possible field names
-      var orderId = row.Title || row.OrderID || "";
-      return {
-        spId: row.Id,
-        id: orderId,
-        customer: row.Customer || row.Customer0 || "",
-        submittedBy: row.SubmittedBy || row.SubmittedBy0 || "",
-        date: (row.Date || row.OrderDate) ? (row.Date || row.OrderDate).split("T")[0] : "",
-        notes: row.Notes || row.Notes0 || row.Notes1 || "",
-        archived: !!(row.Archived || row.Archived0),
-        archivedDate: (row.ArchivedDate || row.ArchivedDate0) ? (row.ArchivedDate || row.ArchivedDate0).split("T")[0] : null,
-        items: itemsByOrder[orderId] || []
-      };
-    });
-    state.loading = false; render();
-  }).catch(function(err) {
-    state.loading = false;
-    state.error = "Could not load from SharePoint. " + err.message;
-    console.error(err); render();
-  });
 }
+
+
+// ---------------- CREATE ----------------
 
 function createOrder(customer, notes) {
   if (demoMode) {
     var id = "ORD-" + String(demoIdCounter.order++).padStart(3, "0");
-    state.orders.unshift({ spId: Date.now(), id: id, customer: customer, submittedBy: "User", date: new Date().toISOString().split("T")[0], notes: notes || "", archived: false, archivedDate: null, items: [] });
-    state.expandedOrder = id; render(); return;
+
+    state.orders.unshift({
+      spId: Date.now(),
+      id: id,
+      customer: customer,
+      submittedBy: "User",
+      date: new Date().toISOString().split("T")[0],
+      notes: notes || "",
+      archived: false,
+      archivedDate: null,
+      items: []
+    });
+
+    state.expandedOrder = id;
+    render();
+    return;
   }
+
   var count = state.orders.length + 1;
   var orderId = "ORD-" + String(count).padStart(3, "0");
-  // Notes is a reserved SP field - try without it first, then add other fields carefully
-  var orderPayload = { Title: orderId, Customer: customer, Date: new Date().toISOString(), Archived: false };
-  if (notes && notes.trim()) orderPayload.Notes = notes;
-  if (currentAccount && currentAccount.name) orderPayload.SubmittedBy = currentAccount.name;
-  spCreateItem(ORDERS_LIST, orderPayload).then(function(result) {
-    console.log("Order created OK:", result && result.d && result.d.Id);
-    state.expandedOrder = orderId; loadData();
-  }).catch(function(err) {
-    console.error("Order create error:", err);
-    alert("Error creating order: " + err.message);
-  });
+
+  var payload = {
+    Title: orderId,
+    Customer: customer,
+    Date: new Date().toISOString(),
+    Archived: false
+  };
+
+  if (notes && notes.trim()) payload.Notes = notes;
+  if (currentAccount && currentAccount.name) payload.SubmittedBy = currentAccount.name;
+
+  spCreateItem(ORDERS_LIST, payload)
+    .then(function () {
+      state.expandedOrder = orderId;
+      loadData();
+    })
+    .catch(function (err) {
+      alert("Error creating order: " + err.message);
+    });
 }
 
 function createItem(orderId, name, desc, units, brand, masterInner) {
   if (demoMode) {
     var id = "ITM-" + String(demoIdCounter.item++).padStart(3, "0");
-    state.orders = state.orders.map(function(o) {
-      return o.id === orderId ? Object.assign({}, o, { items: o.items.concat([{ spId: Date.now(), id: id, name: name, description: desc || "", units: units || 0, status: state.statuses[0], image: null, factory: "" }]) }) : o;
-    });
-    render(); return;
-  }
-  var ic = state.orders.reduce(function(s, o) { return s + o.items.length; }, 0) + 1;
-  spCreateItem(ITEMS_LIST, { Title: "ITM-" + String(ic).padStart(3, "0"), OrderID: orderId, ItemName: name, Description: desc || "", Brand: brand || "", MasterInner: masterInner || "", Units: units || 0, Status: state.statuses[0], Factory: "" }).then(function() { loadData(); });
-}
 
-function updateItemData(spId, data) {
-  if (demoMode) {
-    state.orders = state.orders.map(function(o) {
-      return Object.assign({}, o, { items: o.items.map(function(i) {
-        if (i.spId !== spId) return i;
-        var u = Object.assign({}, i);
-        if (data.Units !== undefined) u.units = data.Units;
-        if (data.Status) u.status = data.Status;
-        if (data.Factory !== undefined) u.factory = data.Factory;
-        return u;
-      })});
-    });
-    render(); return;
-  }
-  spUpdateItem(ITEMS_LIST, spId, data).then(function() { loadData(); });
-}
+    state.orders = state.orders.map(function (o) {
+      if (o.id !== orderId) return o;
 
-function deleteItemSP(spId) {
-  if (demoMode) {
-    state.orders = state.orders.map(function(o) { return Object.assign({}, o, { items: o.items.filter(function(i) { return i.spId !== spId; }) }); });
-    render(); return;
-  }
-  spDeleteItem(ITEMS_LIST, spId).then(function() { loadData(); });
-}
-
-function deleteOrderSP(order) {
-  if (demoMode) {
-    state.orders = state.orders.filter(function(o) { return o.id !== order.id; });
-    if (state.expandedOrder === order.id) state.expandedOrder = null;
-    render(); return;
-  }
-  var promises = order.items.map(function(i) { return spDeleteItem(ITEMS_LIST, i.spId); });
-  Promise.all(promises).then(function() { return spDeleteItem(ORDERS_LIST, order.spId); }).then(function() { loadData(); });
-}
-
-function archiveOrderSP(order) {
-  if (demoMode) {
-    state.orders = state.orders.map(function(o) { return o.id === order.id ? Object.assign({}, o, { archived: true, archivedDate: new Date().toISOString().split("T")[0] }) : o; });
-    state.expandedOrder = null; render(); return;
-  }
-  spUpdateItem(ORDERS_LIST, order.spId, { Archived: true, ArchivedDate: new Date().toISOString() }).then(function() { state.expandedOrder = null; loadData(); });
-}
-
-function restoreOrderSP(order) {
-  if (demoMode) {
-    state.orders = state.orders.map(function(o) { return o.id === order.id ? Object.assign({}, o, { archived: false, archivedDate: null }) : o; });
-    render(); return;
-  }
-  spUpdateItem(ORDERS_LIST, order.spId, { Archived: false, ArchivedDate: null }).then(function() { loadData(); });
-}
-
-function bulkUpdateStatus(newStatus) {
-  if (demoMode) {
-    state.orders = state.orders.map(function(o) { return Object.assign({}, o, { items: o.items.map(function(i) { return state.selectedItems[i.id] ? Object.assign({}, i, { status: newStatus }) : i; }) }); });
-    state.selectedItems = {}; render(); return;
-  }
-  var promises = [];
-  state.orders.forEach(function(o) { o.items.forEach(function(i) { if (state.selectedItems[i.id]) promises.push(spUpdateItem(ITEMS_LIST, i.spId, { Status: newStatus })); }); });
-  Promise.all(promises).then(function() { state.selectedItems = {}; loadData(); });
-}
-
-function importOrders(ordersData) {
-  if (demoMode) {
-    ordersData.forEach(function(o) {
-      var id = "ORD-" + String(demoIdCounter.order++).padStart(3, "0");
-      var items = o.items.map(function(it) { return { spId: Date.now() + Math.random(), id: "ITM-" + String(demoIdCounter.item++).padStart(3, "0"), name: it.name, description: it.description || "", units: it.units || 0, status: state.statuses[0], image: null, factory: "" }; });
-      state.orders.unshift({ spId: Date.now(), id: id, customer: o.customer, submittedBy: "User", date: new Date().toISOString().split("T")[0], notes: o.notes || "", archived: false, archivedDate: null, items: items });
-    });
-    if (state.orders.length) state.expandedOrder = state.orders[0].id;
-    render(); return;
-  }
-  console.log("IMPORT START - ordersData:", JSON.stringify(ordersData.map(function(o){return{customer:o.customer,itemCount:o.items.length};})));
-  var itemCounter = state.orders.reduce(function(s, o) { return s + o.items.length; }, 0);
-  var chain = Promise.resolve();
-  ordersData.forEach(function(o, idx) {
-    chain = chain.then(function() {
-      var count = state.orders.length + idx + 1;
-      var orderId = "ORD-" + String(count).padStart(3, "0");
-      var orderPayload = { Title: orderId, Customer: o.customer || "Unknown", Date: new Date().toISOString(), Archived: false };
-      if (o.notes && o.notes.trim()) orderPayload.Notes = o.notes;
-      if (currentAccount && currentAccount.name) orderPayload.SubmittedBy = currentAccount.name;
-      console.log("Creating order:", orderId, "payload:", JSON.stringify(orderPayload));
-      return spCreateItem(ORDERS_LIST, orderPayload).then(function(result) {
-        console.log("Order CREATED OK:", orderId, "SP ID:", result && result.d && result.d.Id);
-        var itemChain = Promise.resolve();
-        o.items.forEach(function(item) {
-          itemChain = itemChain.then(function() {
-            itemCounter++;
-            var itemId = "ITM-" + String(itemCounter).padStart(3, "0");
-            var imageUploadPromise = item.image && !demoMode
-              ? compressImage(item.image, 800, 0.75).then(function(compressed) { return uploadImageToSP(compressed, itemId); })
-              : Promise.resolve(null);
-            return imageUploadPromise.then(function(imageUrl) {
-              var itemPayload = { Title: itemId, OrderID: orderId, ItemName: item.name, Description: item.description || "", Brand: item.brand || "", MasterInner: item.masterInner || "", Units: item.units || 0, Status: state.statuses[0], Factory: "" };
-              if (imageUrl) itemPayload.ImageURL = imageUrl;
-              return spCreateItem(ITEMS_LIST, itemPayload);
-            }).catch(function(err) {
-              console.warn("Image upload failed, creating item without image:", err);
-              return spCreateItem(ITEMS_LIST, { Title: itemId, OrderID: orderId, ItemName: item.name, Description: item.description || "", Brand: item.brand || "", MasterInner: item.masterInner || "", Units: item.units || 0, Status: state.statuses[0], Factory: "" });
-            });
-          });
-        });
-        return itemChain;
-      }).catch(function(err) {
-        console.error("ORDER CREATE FAILED for", orderId, err);
-        alert("Order create failed for " + orderId + ": " + err.message);
-        throw err;
+      return Object.assign({}, o, {
+        items: o.items.concat([{
+          spId: Date.now(),
+          id: id,
+          name: name,
+          description: desc || "",
+          units: units || 0,
+          status: state.statuses[0],
+          image: null,
+          factory: ""
+        }])
       });
     });
+
+    render();
+    return;
+  }
+
+  var count = state.orders.reduce(function (s, o) {
+    return s + o.items.length;
+  }, 0) + 1;
+
+  var itemId = "ITM-" + String(count).padStart(3, "0");
+
+  spCreateItem(ITEMS_LIST, {
+    Title: itemId,
+    OrderID: orderId,
+    ItemName: name,
+    Description: desc || "",
+    Brand: brand || "",
+    MasterInner: masterInner || "",
+    Units: units || 0,
+    Status: state.statuses[0],
+    Factory: ""
+  }).then(function () {
+    loadData();
   });
-  chain.then(function() { console.log("IMPORT DONE"); loadData(); }).catch(function(err) { console.error("Import chain failed:", err); });
 }
 
 // -- DEMO DATA --
