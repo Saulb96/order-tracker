@@ -370,7 +370,7 @@ function loadData() {
       var itemRows = results[1];
 
       var itemsByOrder = {};
-
+      var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";
       itemRows.forEach(function (row) {
         var oid = row.OrderID || row.Title || "";
 
@@ -384,7 +384,7 @@ function loadData() {
           brand: row.Brand || "",
           masterInner: row.MasterInner || "",
           units: row.Units || 0,
-          status: row.Status || var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";,
+          status: row.Status || defaultStatus,
           factory: row.Factory || "",
           image: row.ImageURL || null
         });
@@ -420,14 +420,7 @@ function loadData() {
 
 // ---------------- SETTINGS ----------------
 
-function loadSettings()
-function saveSetting(type, value) {
-  return spCreateItem("AppSettings", {
-    Title: value,
-    SettingType: type,
-    Value: value
-  });
-}{
+function loadSettings() {
   return spGetItems("AppSettings").then(function(items) {
 
     state.statuses = [];
@@ -437,12 +430,12 @@ function saveSetting(type, value) {
       if (i.SettingType === "status") {
         state.statuses.push(i.Value);
       }
+
       if (i.SettingType === "factory") {
         state.factories.push(i.Value);
       }
     });
 
-    // ✅ ADD THIS (prevents empty app / broken dropdowns)
     if (!state.statuses.length) {
       state.statuses = ["Open", "In Progress", "Complete"];
     }
@@ -454,15 +447,11 @@ function saveSetting(type, value) {
   });
 }
 
-    items.forEach(function (i) {
-      if (i.SettingType === "status") {
-        state.statuses.push(i.Value);
-      }
-
-      if (i.SettingType === "factory") {
-        state.factories.push(i.Value);
-      }
-    });
+function saveSetting(type, value) {
+  return spCreateItem("AppSettings", {
+    Title: value,
+    SettingType: type,
+    Value: value
   });
 }
 
