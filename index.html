@@ -584,9 +584,16 @@ function deriveOrderStatus(items) {
     return "Complete";
   }
 
-  if (items.some(function(i) { return i.status !== defaultStatus; })) {
-    return "In Progress";
-  }
+  function deriveOrderStatus(items) {
+  var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open";
+
+  if (!items.length) return "Open";
+
+  var last = state.statuses[state.statuses.length - 1];
+
+  if (items.every(function(i) { return i.status === last; })) return "Complete";
+
+  if (items.some(function(i) { return i.status !== last; })) return "In Progress";
 
   return "Open";
 }
@@ -828,7 +835,7 @@ function render() {
         h += '<td style="color:#1E293B;font-weight:600;text-align:right">' + (d.mapping.units ? (parseInt(row[d.mapping.units]) || 0) : "-") + '</td></tr>';
       });
       h += '</tbody></table></div>';
-      h += '<div style="font-size:12px;color:#64748B;margin-bottom:14px">' + d.rows.length + ' items. All start as "' + var defaultStatus = state.statuses && state.statuses[0] ? state.statuses[0] : "Open"; + '".</div>';
+      h += '<div style="font-size:12px;color:#64748B;margin-bottom:14px">' + d.rows.length + ' items. All start as "' + getDefaultStatus() + '".</div>';
       h += '<div class="modal-actions"><button class="btn" onclick="state.modalData.step=\'map\';render()">Back</button>';
       h += '<button class="btn btn-primary" onclick="submitImport()">Import ' + d.rows.length + ' Items</button></div>';
       h += '</div></div></div>';
