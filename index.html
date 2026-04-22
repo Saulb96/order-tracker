@@ -890,7 +890,7 @@ function addSetting(tab) {
 
   spCreateItem("AppSettings", {
     Title: v,
-    i.Type_x002e_: type,
+    i.SettingType: type,
     Value: v
   }).then(function() {
     return loadSettings();
