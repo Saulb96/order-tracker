@@ -347,7 +347,6 @@ var state = {
 // -- DATA OPERATIONS --
 var demoIdCounter = { order: 4, item: 7 };
 
-function loadData()
 function loadSettings() {
   return spGetItems("AppSettings").then(function(items) {
     state.statuses = [];
@@ -362,25 +361,38 @@ function loadSettings() {
       }
     });
   });
-} {
-  state.loading = true; state.error = null; render();
-  if (demoMode) { state.loading = false; render(); return; }
-  getToken().then(function() {
-    // Log actual field names to help debug
-    spGetListFields(ORDERS_LIST).catch(function(e) { console.warn("Could not get Orders fields:", e); });
-    return Promise.all([spGetItems(ORDERS_LIST), spGetItems(ITEMS_LIST)]);
-  }).then(function(results) {
-    var orderRows = results[0], itemRows = results[1];
+}
 
-    // Log first row to help debug field names
-    if (orderRows.length > 0) console.log("ORDER FIELDS:", Object.keys(orderRows[0]).filter(function(k) { return k.indexOf("__") !== 0 && k !== "__metadata"; }));
-    if (itemRows.length > 0) console.log("ITEM FIELDS:", Object.keys(itemRows[0]).filter(function(k) { return k.indexOf("__") !== 0 && k !== "__metadata"; }));
+function loadData() {
+  state.loading = true;
+  state.error = null;
+  render();
+
+  if (demoMode) {
+    state.loading = false;
+    render();
+    return;
+  }
+
+  getToken().then(function() {
+    spGetListFields(ORDERS_LIST).catch(function(e) {
+      console.warn("Could not get Orders fields:", e);
+    });
+
+    return Promise.all([
+      spGetItems(ORDERS_LIST),
+      spGetItems(ITEMS_LIST)
+    ]);
+  }).then(function(results) {
+    var orderRows = results[0],
+        itemRows = results[1];
 
     var itemsByOrder = {};
+
     itemRows.forEach(function(row) {
-      // Try multiple possible field names for OrderID
       var oid = row.OrderID || row.OrderID0 || row.Title || "";
       if (!itemsByOrder[oid]) itemsByOrder[oid] = [];
+
       itemsByOrder[oid].push({
         spId: row.Id,
         id: row.Title || row.ItemID || "",
@@ -394,26 +406,35 @@ function loadSettings() {
         image: row.ImageURL || (window._localImages && window._localImages[row.Id]) || null
       });
     });
+
     state.orders = orderRows.map(function(row) {
-      // Try multiple possible field names
       var orderId = row.Title || row.OrderID || "";
+
       return {
         spId: row.Id,
         id: orderId,
         customer: row.Customer || row.Customer0 || "",
         submittedBy: row.SubmittedBy || row.SubmittedBy0 || "",
-        date: (row.Date || row.OrderDate) ? (row.Date || row.OrderDate).split("T")[0] : "",
+        date: (row.Date || row.OrderDate)
+          ? (row.Date || row.OrderDate).split("T")[0]
+          : "",
         notes: row.Notes || row.Notes0 || row.Notes1 || "",
         archived: !!(row.Archived || row.Archived0),
-        archivedDate: (row.ArchivedDate || row.ArchivedDate0) ? (row.ArchivedDate || row.ArchivedDate0).split("T")[0] : null,
+        archivedDate: (row.ArchivedDate || row.ArchivedDate0)
+          ? (row.ArchivedDate || row.ArchivedDate0).split("T")[0]
+          : null,
         items: itemsByOrder[orderId] || []
       };
     });
-    state.loading = false; render();
+
+    state.loading = false;
+    render();
+
   }).catch(function(err) {
     state.loading = false;
     state.error = "Could not load from SharePoint. " + err.message;
-    console.error(err); render();
+    console.error(err);
+    render();
   });
 }
 
