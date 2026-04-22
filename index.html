@@ -903,7 +903,7 @@ function addSetting(tab) {
 
   spGetItems("AppSettings").then(function(items) {
     var match = items.find(function(i) {
-      return i.Value === val && i.i.Type_x002e_ === type;
+      return i.Value === val && i.Type_x002e_ === type;
     });
 
     if (!match) return;
