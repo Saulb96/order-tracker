@@ -352,10 +352,10 @@ function loadSettings() {
     state.factories = [];
 
     items.forEach(function(i) {
-      if (i.SettingType === "status") {
+      if (i.SettingType === "Status") {
         state.statuses.push(i.Value);
       }
-      if (i.SettingType === "factory") {
+      if (i.SettingType === "Factory") {
         state.factories.push(i.Value);
       }
     });
