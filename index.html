@@ -352,10 +352,10 @@ function loadSettings() {
     state.factories = [];
 
     items.forEach(function(i) {
-      if (i.i.Type_x002e_ === "Status") {
+      if (i.Type_x002e_ === "Status") {
         state.statuses.push(i.Value);
       }
-      if (i.i.Type_x002e_ === "Factory") {
+      if (i.Type_x002e_ === "Factory") {
         state.factories.push(i.Value);
       }
     });
