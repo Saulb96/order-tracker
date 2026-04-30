@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order Tracker</title>
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#F8FAFC;color:#1E293B;min-height:100vh}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
+.header{background:#fff;border-bottom:1px solid #E2E8F0;padding:14px 24px;position:sticky;top:0;z-index:100}
+.header-inner{max-width:920px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.header-title{font-size:17px;font-weight:700;color:#0F172A}
+.header-sub{font-size:12px;color:#94A3B8;margin-top:1px}
+.header-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.btn{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid #E2E8F0;background:#fff;color:#475569;transition:background 0.15s}
+.btn:hover{background:#F1F5F9}
+.btn-primary{background:#0F172A;color:#fff;border:none}
+.btn-primary:hover{background:#1E293B}
+.btn-danger{border-color:#FEE2E2;background:#FFF5F5;color:#DC2626}
+.btn-archive{color:#6366F1}
+.btn-restore{background:#EEF2FF;color:#4338CA;border-color:#C7D2FE}
+.btn-dashed{border:1px dashed #CBD5E1;background:transparent;color:#64748B}
+.btn-sm{padding:5px 10px;font-size:11px;border-radius:7px}
+.input,.select{padding:6px 10px;border-radius:8px;border:1px solid #E2E8F0;font-size:13px;outline:none;font-family:inherit;background:#fff}
+.input:focus{border-color:#6366F1;box-shadow:0 0 0 2px rgba(99,102,241,0.1)}
+.select{cursor:pointer;color:#64748B;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-dot{width:6px;height:6px;border-radius:50%}
+.order-card{background:#fff;border-radius:12px;margin-bottom:8px;border:1px solid #E2E8F0;overflow:hidden}
+.order-card.expanded{border-color:#CBD5E1;border-width:1.5px}
+.order-header{padding:13px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:10px}
+.order-header:hover{background:#FAFBFC}
+.order-chevron{font-size:18px;transition:transform 0.2s;color:#94A3B8}
+.order-chevron.open{transform:rotate(90deg)}
+.order-id{font-size:11px;font-weight:600;color:#94A3B8;font-family:monospace}
+.order-customer{font-size:14px;font-weight:600;color:#0F172A}
+.order-meta{font-size:11px;color:#94A3B8;margin-top:2px}
+.order-notes{padding:8px 16px;background:#FFFBEB;font-size:12px;color:#92400E;border-bottom:1px solid #F1F5F9}
+.order-actions{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:#FAFBFC}
+.item-row{padding:10px 16px;border-bottom:1px solid #F8FAFC;display:flex;align-items:center;gap:10px}
+.item-row.selected{background:#F8FAFF}
+.item-thumb{width:64px;height:64px;border-radius:8px;background:#F1F5F9;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+.item-info{flex:1;min-width:0}
+.item-name{font-size:13px;font-weight:600;color:#1E293B}
+.item-desc{font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item-units{font-size:13px;font-weight:600;color:#475569;text-align:right;min-width:44px;padding:2px 6px;border-radius:6px;cursor:pointer}
+.item-units:hover{background:#F1F5F9}
+.item-units-label{font-size:10px;color:#94A3B8;font-weight:400}
+.item-units-input{width:52px;padding:2px 6px;border-radius:6px;border:1px solid #6366F1;background:#EEF2FF;font-size:12px;text-align:right;outline:none;font-family:inherit}
+.item-select{padding:4px 6px;border-radius:6px;border:1px solid #E2E8F0;font-size:10px;cursor:pointer;font-family:inherit;outline:none;max-width:95px;background:#FAFBFC}
+.item-status{padding:4px 6px;border-radius:6px;border:1px solid #E2E8F0;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;outline:none}
+.item-delete{background:none;border:none;cursor:pointer;color:#CBD5E1;font-size:16px;padding:2px}
+.item-delete:hover{color:#EF4444}
+.select-all{padding:6px 16px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;gap:8px}
+.select-all label{font-size:10px;color:#94A3B8;font-weight:600;cursor:pointer}
+.bulk-bar{background:#1E293B;padding:8px 24px}
+.bulk-inner{max-width:920px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bulk-label{font-size:12px;color:#F8FAFC;font-weight:600}
+.img-popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:2000;cursor:pointer}
+.img-popup-overlay img{max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,0.5)}
+.img-popup-close{position:fixed;top:20px;right:24px;color:#fff;font-size:32px;cursor:pointer;line-height:1;opacity:0.8}
+.img-popup-close:hover{opacity:1}
+.bulk-btn{padding:4px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#F8FAFC;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit}
+.bulk-clear{margin-left:auto;background:none;border:none;color:#94A3B8;font-size:11px;cursor:pointer;font-family:inherit}
+.view-toggle{display:flex;border-radius:8px;border:1px solid #E2E8F0;overflow:hidden}
+.view-toggle button{padding:6px 10px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;text-transform:capitalize;background:#fff;color:#94A3B8}
+.view-toggle button.active{background:#F1F5F9;color:#0F172A}
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:16px;width:94%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.15)}
+.modal.wide{max-width:680px}
+.modal:not(.wide){max-width:520px}
+.modal-body{padding:24px}
+.modal-title{font-size:17px;font-weight:700;color:#0F172A;margin-bottom:4px}
+.modal-sub{font-size:12px;color:#94A3B8;margin-bottom:16px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.field{margin-bottom:14px}
+.field-label{display:block;font-size:11px;font-weight:600;color:#64748B;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em}
+.field-input{width:100%;padding:8px 12px;border-radius:8px;border:1px solid #E2E8F0;font-size:13px;font-family:inherit;outline:none;background:#FAFBFC;box-sizing:border-box}
+.field-input:focus{border-color:#6366F1}
+.tab-bar{display:flex;gap:6px;margin-bottom:18px}
+.tab-btn{padding:6px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-transform:capitalize;border:1px solid #E2E8F0;background:#fff;color:#64748B}
+.tab-btn.active{border-color:#6366F1;background:#EEF2FF;color:#4338CA}
+.settings-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #F1F5F9}
+.dropzone{border:2px dashed #CBD5E1;border-radius:12px;padding:48px 24px;text-align:center;cursor:pointer;background:#FAFBFC}
+.dropzone:hover{border-color:#6366F1}
+.map-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.map-label{width:110px;font-size:12px;font-weight:600;color:#64748B}
+.map-select{flex:1;padding:7px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;border:1px solid #E2E8F0;background:#FAFBFC}
+.map-select.mapped{border-color:#86EFAC;background:#F0FDF4}
+.preview-table{width:100%;border-collapse:collapse;font-size:12px}
+.preview-table th{padding:8px 12px;text-align:left;font-weight:600;color:#64748B;font-size:11px;background:#F8FAFC}
+.preview-table td{padding:7px 12px;border-top:1px solid #F1F5F9}
+.success-banner{background:#F0FDF4;border-radius:8px;padding:8px 12px;font-size:12px;color:#15803D;margin-bottom:14px}
+.error-banner{background:#FEF2F2;border-radius:8px;padding:8px 12px;font-size:12px;color:#DC2626;margin-top:10px}
+.container{max-width:920px;margin:0 auto;padding:16px 16px 40px}
+.checkbox{width:14px;height:14px;cursor:pointer;accent-color:#6366F1;flex-shrink:0}
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid #E2E8F0;border-top-color:#6366F1;border-radius:50%;animation:spin 0.6s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px}
+.login-title{font-size:24px;font-weight:700;color:#0F172A}
+.login-sub{font-size:14px;color:#94A3B8}
+.login-btn{padding:12px 32px;border-radius:10px;border:none;background:#0F172A;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:10px}
+.login-btn:hover{background:#1E293B}
+.demo-banner{background:#FEF3C7;padding:6px 24px;text-align:center;font-size:12px;color:#92400E;border-bottom:1px solid #FDE68A}
+.demo-banner a{color:#92400E;text-decoration:underline}
+.user-info{font-size:11px;color:#94A3B8;cursor:pointer}
+.user-info:hover{color:#64748B}
+.order-id-edit{font-size:11px;font-weight:600;font-family:monospace;color:#94A3B8;background:none;border:none;outline:none;width:72px;cursor:text;padding:0}
+.order-id-edit:focus{background:#F1F5F9;border-radius:4px;padding:1px 4px;color:#0F172A}
+.item-cost{font-size:11px;color:#64748B;text-align:right;min-width:54px}
+.item-cost-val{font-weight:600;color:#1E293B}
+.item-notes-input{width:100%;font-size:11px;color:#475569;border:none;outline:none;background:transparent;font-family:inherit;resize:none;padding:2px 0;border-bottom:1px solid transparent}
+.item-notes-input:focus{border-bottom-color:#6366F1}
+.item-notes-row{padding:2px 16px 8px 90px;display:flex;align-items:center;gap:6px}
+</style>
+</head>
+<body>
+<input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+<div id="app"><div class="login-screen"><span class="spinner"></span><div class="login-sub">Loading...</div></div></div>
+<script>
+// -- CONFIGURATION --
+var CLIENT_ID = "7184a05e-f154-4dc8-bb4c-d8e83e9bdce8";
+var TENANT_ID = "eeea7e3e-9ccb-4a16-894e-3417c6a7a4c1";
+var SITE_URL = "https://met1sol.sharepoint.com/sites/Production";
+var ORDERS_LIST = "Orders";
+var ITEMS_LIST = "OrderItems";
+
+// -- AUTH STATE --
+var msalInstance = null;
+var currentAccount = null;
+var accessToken = null;
+var demoMode = false;
+
+// -- MSAL CONFIG --
+var msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: "https://login.microsoftonline.com/" + TENANT_ID,
+    redirectUri: window.location.origin + window.location.pathname
+  },
+  cache: { cacheLocation: "localStorage", storeAuthStateInCookie: false }
+};
+
+function initAuth() {
+  if (CLIENT_ID.indexOf("YOUR_") === 0) {
+    enterDemoMode();
+    return;
+  }
+  try {
+    msalInstance = new msal.PublicClientApplication(msalConfig);
+    msalInstance.initialize().then(function() {
+      return msalInstance.handleRedirectPromise();
+    }).then(function(response) {
+      if (response) {
+        currentAccount = response.account;
+      } else {
+        var accounts = msalInstance.getAllAccounts();
+        if (accounts.length > 0) currentAccount = accounts[0];
+      }
+      if (currentAccount) {
+        getToken()
+  .then(function() {
+    return loadSettings();
+  })
+  .then(function() {
+    return loadData();
+  });
+      } else {
+        renderLoginScreen();
+      }
+    }).catch(function(err) {
+      console.error("Auth error:", err);
+      enterDemoMode();
+    });
+  } catch (err) {
+    console.error("MSAL init error:", err);
+    enterDemoMode();
+  }
+}
+
+function login() {
+  msalInstance.loginRedirect({
+    scopes: ["https://met1sol.sharepoint.com/AllSites.Write"]
+  });
+}
+
+function logout() {
+  if (msalInstance) msalInstance.logoutRedirect();
+}
+
+function getToken() {
+  return msalInstance.acquireTokenSilent({
+    scopes: ["https://met1sol.sharepoint.com/AllSites.Write"],
+    account: currentAccount
+  }).then(function(resp) {
+    accessToken = resp.accessToken;
+  }).catch(function() {
+    return msalInstance.acquireTokenRedirect({
+      scopes: ["https://met1sol.sharepoint.com/AllSites.Write"]
+    });
+  });
+}
+
+function renderLoginScreen() {
+  document.getElementById("app").innerHTML =
+    '<div class="login-screen">' +
+    '<div style="font-size:40px">&#128230;</div>' +
+    '<div class="login-title">Order Tracker</div>' +
+    '<div class="login-sub">Sign in with your work account to get started</div>' +
+    '<button class="login-btn" onclick="login()">Sign in with Microsoft</button>' +
+    '<div style="margin-top:12px"><button class="btn" onclick="enterDemoMode()">Try Demo Mode</button></div>' +
+    '</div>';
+}
+
+// -- SHAREPOINT REST API --
+function spHeaders(method) {
+  var h = { "Accept": "application/json;odata=verbose", "Authorization": "Bearer " + accessToken };
+  if (method === "POST" || method === "MERGE") h["Content-Type"] = "application/json;odata=verbose";
+  return h;
+}
+
+function spGetItems(listName) {
+  var url = SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/items?$top=5000";
+  return fetch(url, { headers: spHeaders() }).then(function(r) {
+    if (!r.ok) throw new Error("Failed: " + r.status);
+    return r.json();
+  }).then(function(d) { return d.d.results; });
+}
+
+function spGetListType(listName) {
+  return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')", { headers: spHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { return d.d.ListItemEntityTypeFullName; });
+}
+
+function spGetListFields(listName) {
+  return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/fields?$filter=Hidden eq false and ReadOnlyField eq false", { headers: spHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var fields = d.d.results.map(function(f) { return { title: f.Title, internalName: f.InternalName }; });
+      console.log(listName + " FIELDS:", JSON.stringify(fields));
+      return fields;
+    });
+}
+
+function spCreateItem(listName, data) {
+  return spGetListType(listName).then(function(itemType) {
+    data.__metadata = { type: itemType };
+    return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/items", {
+      method: "POST", headers: spHeaders("POST"), body: JSON.stringify(data)
+    });
+  }).then(function(r) {
+    if (!r.ok) {
+      return r.json().then(function(err) {
+        var msg = (err && err.error && err.error.message && err.error.message.value) || ("HTTP " + r.status);
+        throw new Error(listName + " create failed: " + msg);
+      });
+    }
+    return r.json();
+  });
+}
+
+function spUpdateItem(listName, itemId, data) {
+  return spGetListType(listName).then(function(itemType) {
+    data.__metadata = { type: itemType };
+    var h = spHeaders("MERGE");
+    h["X-HTTP-Method"] = "MERGE";
+    h["If-Match"] = "*";
+    return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/items(" + itemId + ")", {
+      method: "POST", headers: h, body: JSON.stringify(data)
+    });
+  });
+}
+
+function spDeleteItem(listName, itemId) {
+  var h = spHeaders();
+  h["X-HTTP-Method"] = "DELETE";
+  h["If-Match"] = "*";
+  return fetch(SITE_URL + "/_api/web/lists/getbytitle('" + listName + "')/items(" + itemId + ")", {
+    method: "POST", headers: h
+  });
+}
+
+// -- SHAREPOINT IMAGE UPLOAD --
+function uploadImageToSP(base64DataUrl, fileName) {
+  // Convert base64 data URL to binary
+  var parts = base64DataUrl.split(',');
+  var mime = parts[0].match(/:(.*?);/)[1];
+  var binary = atob(parts[1]);
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  var ext = mime === 'image/png' ? '.png' : '.jpg';
+  var safeName = fileName.replace(/[^a-zA-Z0-9_-]/g, '_') + '_' + Date.now() + ext;
+  var folderUrl = SITE_URL + "/SiteAssets/OrderImages";
+  var uploadUrl = SITE_URL + "/_api/web/GetFolderByServerRelativeUrl('/sites/Production/SiteAssets/OrderImages')/Files/add(url='" + safeName + "',overwrite=true)";
+
+  // First ensure folder exists, then upload
+  return ensureFolder(folderUrl).then(function() {
+    return fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json;odata=verbose",
+        "Authorization": "Bearer " + accessToken,
+        "Content-Length": bytes.length
+      },
+      body: bytes.buffer
+    });
+  }).then(function(r) {
+    if (!r.ok) throw new Error("Image upload failed: " + r.status);
+    return r.json();
+  }).then(function(data) {
+    // Return the server-relative URL converted to absolute
+    var serverRelUrl = data.d.ServerRelativeUrl;
+    return SITE_URL.replace("/sites/Production", "") + serverRelUrl;
+  });
+}
+
+function ensureFolder(folderUrl) {
+  // Try to get the folder, create it if it doesn't exist
+  return fetch(SITE_URL + "/_api/web/GetFolderByServerRelativeUrl('/sites/Production/SiteAssets/OrderImages')", {
+    headers: { "Accept": "application/json;odata=verbose", "Authorization": "Bearer " + accessToken }
+  }).then(function(r) {
+    if (r.ok) return; // Folder exists
+    // Create folder
+    return fetch(SITE_URL + "/_api/web/folders", {
+      method: "POST",
+      headers: {
+        "Accept": "application/json;odata=verbose",
+        "Content-Type": "application/json;odata=verbose",
+        "Authorization": "Bearer " + accessToken
+      },
+      body: JSON.stringify({ __metadata: { type: "SP.Folder" }, ServerRelativeUrl: "/sites/Production/SiteAssets/OrderImages" })
+    });
+  });
+}
+
+// -- APP STATE --
+var state = {
+  orders: [], loading: true, error: null, expandedOrder: null,
+  view: "active", searchTerm: "", sortBy: "date-desc",
+  selectedItems: {},
+  selectedOrders: {},
+  statuses: ["Pending", "Ordered", "Shipped", "Received"],
+  factories: ["Factory A", "Factory B", "Factory C", "Overseas Plant 1", "Overseas Plant 2"],
+  modal: null, modalData: {}
+};
+
+// -- DATA OPERATIONS --
+var demoIdCounter = { order: 4, item: 7 };
+function loadSettings() {
+  return spGetItems("AppSettings").then(function(items) {
+    var statuses = [];
+    var factories = [];
+    items.forEach(function(i) {
+      if (i.Type_x002e_ === "status") statuses.push(i.Value);
+      if (i.Type_x002e_ === "factory") factories.push(i.Value);
+    });
+    if (statuses.length) state.statuses = statuses;
+    if (factories.length) state.factories = factories;
+    console.log("Loaded settings — statuses:", state.statuses, "factories:", state.factories);
+  }).catch(function(err) {
+    console.warn("Could not load AppSettings:", err);
+  });
+}
+
+function loadData() {
+  state.loading = true;
+  state.error = null;
+  render();
+
+  if (demoMode) {
+    state.loading = false;
+    render();
+    return;
+  }
+
+  getToken().then(function() {
+    spGetListFields(ORDERS_LIST).catch(function(e) {
+      console.warn("Could not get Orders fields:", e);
+    });
+
+    return Promise.all([
+      spGetItems(ORDERS_LIST),
+      spGetItems(ITEMS_LIST)
+    ]);
+  }).then(function(results) {
+    var orderRows = results[0],
+        itemRows = results[1];
+
+    var itemsByOrder = {};
+
+    itemRows.forEach(function(row) {
+      var oid = row.OrderID || row.OrderID0 || row.Title || "";
+      if (!itemsByOrder[oid]) itemsByOrder[oid] = [];
+
+      itemsByOrder[oid].push({
+        spId: row.Id,
+        id: row.Title || row.ItemID || "",
+        name: row.ItemName || row.ItemName0 || "",
+        description: row.Description || row.Description0 || "",
+        brand: row.Brand || row.Brand0 || "",
+        masterInner: row.MasterInner || row.Master_Inner || "",
+        units: row.Units || row.Units0 || 0,
+        cost: row.Cost || row.Cost0 || 0,
+        notes: row.Notes || row.Notes0 || "",
+        status: row.Status || row.Status0 || state.statuses[0],
+        factory: row.Factory || row.Factory0 || "",
+        ticketed: row.Ticketed || "",
+        image: row.ImageURL || (window._localImages && window._localImages[row.Id]) || null
+      });
+    });
+
+    state.orders = orderRows.map(function(row) {
+      var orderId = row.Title || row.OrderID || "";
+
+      return {
+        spId: row.Id,
+        id: orderId,
+        customer: row.Customer || row.Customer0 || "",
+        submittedBy: row.SubmittedBy || row.SubmittedBy0 || "",
+        date: (row.Date || row.OrderDate)
+          ? (row.Date || row.OrderDate).split("T")[0]
+          : "",
+        notes: row.Notes || row.Notes0 || row.Notes1 || "",
+        archived: !!(row.Archived || row.Archived0),
+        archivedDate: (row.ArchivedDate || row.ArchivedDate0)
+          ? (row.ArchivedDate || row.ArchivedDate0).split("T")[0]
+          : null,
+        items: itemsByOrder[orderId] || []
+      };
+    });
+
+    state.loading = false;
+    render();
+
+  }).catch(function(err) {
+    state.loading = false;
+    state.error = "Could not load from SharePoint. " + err.message;
+    console.error(err);
+    render();
+  });
+}
+
+function createOrder(customer, notes) {
+  if (demoMode) {
+    var id = "ORD-" + String(demoIdCounter.order++).padStart(3, "0");
+    state.orders.unshift({ spId: Date.now(), id: id, customer: customer, submittedBy: "User", date: new Date().toISOString().split("T")[0], notes: notes || "", archived: false, archivedDate: null, items: [] });
+    state.expandedOrder = id; render(); return;
+  }
+  var count = state.orders.length + 1;
+  var orderId = "ORD-" + String(count).padStart(3, "0");
+  // Notes is a reserved SP field - try without it first, then add other fields carefully
+  var orderPayload = { Title: orderId, Customer: customer, Date: new Date().toISOString(), Archived: false };
+  if (notes && notes.trim()) orderPayload.Notes = notes;
+  if (currentAccount && currentAccount.name) orderPayload.SubmittedBy = currentAccount.name;
+  spCreateItem(ORDERS_LIST, orderPayload).then(function(result) {
+    console.log("Order created OK:", result && result.d && result.d.Id);
+    state.expandedOrder = orderId; loadData();
+  }).catch(function(err) {
+    console.error("Order create error:", err);
+    alert("Error creating order: " + err.message);
+  });
+}
+
+function createItem(orderId, name, desc, units, brand, masterInner) {
+  if (demoMode) {
+    var id = "ITM-" + String(demoIdCounter.item++).padStart(3, "0");
+    state.orders = state.orders.map(function(o) {
+      return o.id === orderId ? Object.assign({}, o, { items: o.items.concat([{ spId: Date.now(), id: id, name: name, description: desc || "", units: units || 0, status: state.statuses[0], image: null, factory: "" }]) }) : o;
+    });
+    render(); return;
+  }
+  var ic = state.orders.reduce(function(s, o) { return s + o.items.length; }, 0) + 1;
+  spCreateItem(ITEMS_LIST, { Title: "ITM-" + String(ic).padStart(3, "0"), OrderID: orderId, ItemName: name, Description: desc || "", Brand: brand || "", MasterInner: masterInner || "", Units: units || 0, Status: state.statuses[0], Factory: "" }).then(function() { loadData(); });
+}
+
+function updateItemData(spId, data) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) {
+      return Object.assign({}, o, { items: o.items.map(function(i) {
+        if (i.spId !== spId) return i;
+        var u = Object.assign({}, i);
+        if (data.Units !== undefined) u.units = data.Units;
+        if (data.Cost !== undefined) u.cost = data.Cost;
+        if (data.Status) u.status = data.Status;
+        if (data.Factory !== undefined) u.factory = data.Factory;
+        if (data.Notes !== undefined) u.notes = data.Notes;
+        return u;
+      })});
+    });
+    render(); return;
+  }
+  spUpdateItem(ITEMS_LIST, spId, data).then(function() { loadData(); });
+}
+
+function deleteItemSP(spId) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return Object.assign({}, o, { items: o.items.filter(function(i) { return i.spId !== spId; }) }); });
+    render(); return;
+  }
+  spDeleteItem(ITEMS_LIST, spId).then(function() { loadData(); });
+}
+
+function deleteOrderSP(order) {
+  if (demoMode) {
+    state.orders = state.orders.filter(function(o) { return o.id !== order.id; });
+    if (state.expandedOrder === order.id) state.expandedOrder = null;
+    render(); return;
+  }
+  var promises = order.items.map(function(i) { return spDeleteItem(ITEMS_LIST, i.spId); });
+  Promise.all(promises).then(function() { return spDeleteItem(ORDERS_LIST, order.spId); }).then(function() { loadData(); });
+}
+
+function archiveOrderSP(order) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return o.id === order.id ? Object.assign({}, o, { archived: true, archivedDate: new Date().toISOString().split("T")[0] }) : o; });
+    state.expandedOrder = null; render(); return;
+  }
+  spUpdateItem(ORDERS_LIST, order.spId, { Archived: true, ArchivedDate: new Date().toISOString() }).then(function() { state.expandedOrder = null; loadData(); });
+}
+
+function restoreOrderSP(order) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return o.id === order.id ? Object.assign({}, o, { archived: false, archivedDate: null }) : o; });
+    render(); return;
+  }
+  spUpdateItem(ORDERS_LIST, order.spId, { Archived: false, ArchivedDate: null }).then(function() { loadData(); });
+}
+
+function bulkUpdateStatus(newStatus) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return Object.assign({}, o, { items: o.items.map(function(i) { return state.selectedItems[i.id] ? Object.assign({}, i, { status: newStatus }) : i; }) }); });
+    state.selectedItems = {}; render(); return;
+  }
+  var promises = [];
+  state.orders.forEach(function(o) { o.items.forEach(function(i) { if (state.selectedItems[i.id]) promises.push(spUpdateItem(ITEMS_LIST, i.spId, { Status: newStatus })); }); });
+  Promise.all(promises).then(function() { state.selectedItems = {}; loadData(); });
+}
+
+function importOrders(ordersData) {
+  if (demoMode) {
+    ordersData.forEach(function(o) {
+      var id = "ORD-" + String(demoIdCounter.order++).padStart(3, "0");
+      var items = o.items.map(function(it) { return { spId: Date.now() + Math.random(), id: "ITM-" + String(demoIdCounter.item++).padStart(3, "0"), name: it.name, description: it.description || "", units: it.units || 0, status: state.statuses[0], image: null, factory: "" }; });
+      state.orders.unshift({ spId: Date.now(), id: id, customer: o.customer, submittedBy: "User", date: new Date().toISOString().split("T")[0], notes: o.notes || "", archived: false, archivedDate: null, items: items });
+    });
+    if (state.orders.length) state.expandedOrder = state.orders[0].id;
+    render(); return;
+  }
+  console.log("IMPORT START - ordersData:", JSON.stringify(ordersData.map(function(o){return{customer:o.customer,itemCount:o.items.length};})));
+  var itemCounter = state.orders.reduce(function(s, o) { return s + o.items.length; }, 0);
+  var chain = Promise.resolve();
+  ordersData.forEach(function(o, idx) {
+    chain = chain.then(function() {
+      var count = state.orders.length + idx + 1;
+      var orderId = "ORD-" + String(count).padStart(3, "0");
+      var orderPayload = { Title: orderId, Customer: o.customer || "Unknown", Date: new Date().toISOString(), Archived: false };
+      if (o.notes && o.notes.trim()) orderPayload.Notes = o.notes;
+      if (currentAccount && currentAccount.name) orderPayload.SubmittedBy = currentAccount.name;
+      console.log("Creating order:", orderId, "payload:", JSON.stringify(orderPayload));
+      return spCreateItem(ORDERS_LIST, orderPayload).then(function(result) {
+        console.log("Order CREATED OK:", orderId, "SP ID:", result && result.d && result.d.Id);
+        var itemChain = Promise.resolve();
+        o.items.forEach(function(item) {
+          itemChain = itemChain.then(function() {
+            itemCounter++;
+            var itemId = "ITM-" + String(itemCounter).padStart(3, "0");
+            var imageUploadPromise = item.image && !demoMode
+              ? compressImage(item.image, 800, 0.75).then(function(compressed) { return uploadImageToSP(compressed, itemId); })
+              : Promise.resolve(null);
+            return imageUploadPromise.then(function(imageUrl) {
+              var itemPayload = { Title: itemId, OrderID: orderId, ItemName: item.name, Description: item.description || "", Brand: item.brand || "", MasterInner: item.masterInner || "", Units: item.units || 0, Cost: item.cost || 0, Status: item.status || state.statuses[0], Factory: "" };
+              if (imageUrl) itemPayload.ImageURL = imageUrl;
+              return spCreateItem(ITEMS_LIST, itemPayload);
+            }).catch(function(err) {
+              console.warn("Image upload failed, creating item without image:", err);
+              return spCreateItem(ITEMS_LIST, { Title: itemId, OrderID: orderId, ItemName: item.name, Description: item.description || "", Brand: item.brand || "", MasterInner: item.masterInner || "", Units: item.units || 0, Cost: item.cost || 0, Status: item.status || state.statuses[0], Factory: "" });
+            });
+          });
+        });
+        return itemChain;
+      }).catch(function(err) {
+        console.error("ORDER CREATE FAILED for", orderId, err);
+        alert("Order create failed for " + orderId + ": " + err.message);
+        throw err;
+      });
+    });
+  });
+  chain.then(function() { console.log("IMPORT DONE"); loadData(); }).catch(function(err) { console.error("Import chain failed:", err); });
+}
+
+// -- DEMO DATA --
+var DEMO_DATA = [
+  {spId:1,id:"ORD-001",customer:"Acme Manufacturing",submittedBy:"M. Reynolds",date:"2026-03-15",notes:"Urgent - production line B down",archived:false,archivedDate:null,items:[
+    {spId:1,id:"ITM-001",name:"Industrial Bearings",description:"SKF 6205-2RS deep groove",units:250,status:"Received",image:null,factory:"Factory A"},
+    {spId:2,id:"ITM-002",name:"Bearing Housings",description:"Cast iron pillow block 25mm",units:250,status:"Shipped",image:null,factory:"Factory A"},
+    {spId:3,id:"ITM-003",name:"Lubricant Cartridges",description:"High-temp lithium grease",units:48,status:"Ordered",image:null,factory:"Factory B"}
+  ]},
+  {spId:2,id:"ORD-002",customer:"Delta Logistics",submittedBy:"M. Reynolds",date:"2026-03-22",notes:"",archived:false,archivedDate:null,items:[
+    {spId:4,id:"ITM-004",name:"Hydraulic Cylinders",description:"3in bore x 18in stroke",units:12,status:"Ordered",image:null,factory:"Overseas Plant 1"},
+    {spId:5,id:"ITM-005",name:"Hydraulic Hoses",description:"1/2in braided steel 6ft",units:24,status:"Pending",image:null,factory:""}
+  ]},
+  {spId:3,id:"ORD-003",customer:"FreshPack Foods",submittedBy:"M. Reynolds",date:"2026-03-30",notes:"FDA food-grade required",archived:false,archivedDate:null,items:[
+    {spId:6,id:"ITM-006",name:"Conveyor Belt Sections",description:"24in PVC FDA grade",units:8,status:"Pending",image:null,factory:""}
+  ]}
+];
+
+function enterDemoMode() {
+  demoMode = true;
+  state.orders = JSON.parse(JSON.stringify(DEMO_DATA));
+  state.loading = false; state.error = null;
+  render();
+}
+
+// -- HELPERS --
+var SC = ["#F59E0B","#3B82F6","#8B5CF6","#10B981","#EF4444","#EC4899","#14B8A6","#F97316"];
+function getStatusColor(s) { var i = state.statuses.indexOf(s); return SC[i >= 0 ? i % SC.length : 0]; }
+function deriveOrderStatus(items) {
+  if (!items.length) return "Open";
+  var last = state.statuses[state.statuses.length - 1];
+  if (items.every(function(i) { return i.status === last; })) return "Complete";
+  if (items.some(function(i) { return i.status !== state.statuses[0]; })) return "In Progress";
+  return "Open";
+}
+function orderStatusColor(s) { return s === "Complete" ? "#10B981" : s === "In Progress" ? "#3B82F6" : "#F59E0B"; }
+function getPrimaryFactory(o) { var c = {}; o.items.forEach(function(i) { if (i.factory) c[i.factory] = (c[i.factory] || 0) + 1; }); var b = "", m = 0; for (var f in c) { if (c[f] > m) { b = f; m = c[f]; } } return b; }
+function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"); }
+var FP = { name:[/^item$/i,/item.?name/i,/^style/i,/product/i,/^name$/i,/part/i,/material/i,/sku/i], description:[/desc/i,/detail/i,/spec/i], units:[/^qty$/i,/quant/i,/unit/i,/^amount$/i,/^count$/i,/pcs/i,/available/i,/stock/i], customer:[/customer/i,/client/i,/buyer/i,/company/i], brand:[/^brand$/i,/^brand.?name/i,/^vendor$/i,/^supplier$/i], masterInner:[/master/i,/inner/i,/case.?pack/i,/pack/i], cost:[/^cost$/i,/^price$/i,/^fob$/i,/unit.?cost/i,/cost.?unit/i,/fob.?wh/i], status:[/^status$/i], orderNum:[/^order.?#/i,/^order.?num/i,/^po.?#/i,/^po$/i,/^order$/i] };
+function autoMap(cols) { var m = {name:"",description:"",units:"",customer:"",brand:"",masterInner:"",cost:"",status:"",orderNum:""}; var u = {}; for (var f in FP) { for (var p = 0; p < FP[f].length; p++) { for (var c = 0; c < cols.length; c++) { if (FP[f][p].test(cols[c].trim()) && !u[cols[c]]) { m[f] = cols[c]; u[cols[c]] = true; break; } } if (m[f]) break; } } return m; }
+
+// -- RENDER --
+function render() {
+  var app = document.getElementById("app");
+  var active = state.orders.filter(function(o) { return !o.archived; });
+  var archived = state.orders.filter(function(o) { return o.archived; });
+  var display = state.view === "active" ? active : archived;
+  var s = state.searchTerm.toLowerCase();
+  var filtered = display.filter(function(o) {
+    return o.customer.toLowerCase().indexOf(s) >= 0 || o.id.toLowerCase().indexOf(s) >= 0 || o.items.some(function(i) { return i.name.toLowerCase().indexOf(s) >= 0; });
+  });
+  var sorted = filtered.slice().sort(function(a, b) {
+    switch (state.sortBy) {
+      case "date-desc": return (b.date || "").localeCompare(a.date || "");
+      case "date-asc": return (a.date || "").localeCompare(b.date || "");
+      case "customer-asc": return a.customer.localeCompare(b.customer);
+      case "customer-desc": return b.customer.localeCompare(a.customer);
+      case "status": var ord = {Open:0,"In Progress":1,Complete:2}; return (ord[deriveOrderStatus(a.items)] || 0) - (ord[deriveOrderStatus(b.items)] || 0);
+      case "items-desc": return b.items.length - a.items.length;
+      case "factory": return getPrimaryFactory(a).localeCompare(getPrimaryFactory(b));
+      default: return 0;
+    }
+  });
+  var selCount = Object.keys(state.selectedItems).length;
+  var totalItems = active.reduce(function(s, o) { return s + o.items.length; }, 0);
+  var doneItems = active.reduce(function(s, o) { return s + o.items.filter(function(i) { return i.status === state.statuses[state.statuses.length - 1]; }).length; }, 0);
+  var userName = (currentAccount && currentAccount.name) || "Demo User";
+
+  var h = '<div class="header"><div class="header-inner"><div><div class="header-title">Order Tracker</div><div class="header-sub">' + active.length + ' orders - ' + totalItems + ' items - ' + doneItems + ' complete</div></div><div class="header-actions">';
+  h += '<input class="input" type="text" id="searchBox" placeholder="Search..." value="' + esc(state.searchTerm || "") + '" oninput="state.searchTerm=this.value;render()" style="width:150px">';
+  h += '<select class="select" onchange="state.sortBy=this.value;render()">';
+  h += '<option value="date-desc"' + (state.sortBy==="date-desc"?" selected":"") + '>Newest</option>';
+  h += '<option value="date-asc"' + (state.sortBy==="date-asc"?" selected":"") + '>Oldest</option>';
+  h += '<option value="customer-asc"' + (state.sortBy==="customer-asc"?" selected":"") + '>Customer A-Z</option>';
+  h += '<option value="customer-desc"' + (state.sortBy==="customer-desc"?" selected":"") + '>Customer Z-A</option>';
+  h += '<option value="status"' + (state.sortBy==="status"?" selected":"") + '>By Status</option>';
+  h += '<option value="items-desc"' + (state.sortBy==="items-desc"?" selected":"") + '>Most Items</option>';
+  h += '<option value="factory"' + (state.sortBy==="factory"?" selected":"") + '>By Factory</option></select>';
+  h += '<div class="view-toggle"><button class="' + (state.view==="active"?"active":"") + '" onclick="state.view=\'active\';state.expandedOrder=null;render()">Active</button>';
+  h += '<button class="' + (state.view==="archived"?"active":"") + '" onclick="state.view=\'archived\';state.expandedOrder=null;render()">Archived' + (archived.length ? " (" + archived.length + ")" : "") + '</button></div>';
+  h += '<button class="btn" onclick="state.modal=\'settings\';state.modalData={tab:\'statuses\'};render()">&#9881;</button>';
+  h += '<button class="btn" onclick="state.modal=\'import\';state.modalData={step:\'upload\'};render()">Import</button>';
+  h += '<button class="btn btn-primary" onclick="state.modal=\'newOrder\';state.modalData={customer:\'\',notes:\'\'};render()">+ Order</button>';
+  h += '<span class="user-info" onclick="' + (demoMode ? "" : "logout()") + '" title="' + (demoMode ? "Demo Mode" : "Click to sign out") + '">' + esc(userName) + '</span>';
+  h += '</div></div></div>';
+
+  if (demoMode) h += '<div class="demo-banner"><strong>Demo Mode</strong> - data is not saved. <a href="#" onclick="location.reload();return false">Reload to connect to SharePoint</a></div>';
+
+  if (selCount > 0 || Object.keys(state.selectedOrders).length > 0) {
+    h += '<div class="bulk-bar"><div class="bulk-inner">';
+    h += '<span class="bulk-label">' + selCount + ' item' + (selCount !== 1 ? "s" : "") + ' selected</span>';
+    h += '<div style="display:flex;gap:4px">';
+    state.statuses.forEach(function(st) { h += '<button class="bulk-btn" onclick="bulkUpdateStatus(\'' + esc(st) + '\')">&rarr; ' + esc(st) + '</button>'; });
+    h += '</div>';
+    h += '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;color:#94A3B8">Factory:</span>';
+    h += '<select style="padding:4px 8px;border-radius:6px;border:1px solid #CBD5E1;background:#fff;color:#1E293B;font-size:11px;font-family:inherit;outline:none" onchange="if(this.value){bulkUpdateFactory(this.value);}this.value=\'\'"><option value="">Set factory...</option>';
+    state.factories.forEach(function(f) { h += '<option value="' + esc(f) + '">' + esc(f) + '</option>'; });
+    h += '</select></div>';
+    var orderSelCount = Object.keys(state.selectedOrders).length;
+    if (orderSelCount > 0) h += '<button class="bulk-btn" style="background:#6366F1;border-color:#4338CA;margin-left:8px" onclick="bulkExportOrders()">&#11015; Export ' + orderSelCount + ' Order' + (orderSelCount > 1 ? "s" : "") + '</button>';
+    h += '<button class="bulk-clear" style="margin-left:auto" onclick="state.selectedItems={};state.selectedOrders={};render()">Clear</button>';
+    h += '</div></div>';
+  }
+
+  h += '<div class="container">';
+  if (state.loading) {
+    h += '<div style="text-align:center;padding:60px;color:#94A3B8"><span class="spinner"></span>Loading...</div>';
+  } else if (state.error) {
+    h += '<div style="text-align:center;padding:60px;color:#EF4444;font-size:14px">' + esc(state.error) + '<br><br><button class="btn btn-primary" onclick="loadData()">Retry</button> <button class="btn" onclick="enterDemoMode()">Demo Mode</button></div>';
+  } else if (sorted.length === 0) {
+    h += '<div style="text-align:center;padding:60px;color:#94A3B8;font-size:14px">' + (state.view === "archived" ? "No archived orders" : "No orders found") + '</div>';
+  } else {
+    sorted.forEach(function(order) {
+      var isOpen = state.expandedOrder === order.id;
+      var oS = deriveOrderStatus(order.items);
+      var oC = orderStatusColor(oS);
+      var allSel = order.items.length > 0 && order.items.every(function(i) { return state.selectedItems[i.id]; });
+      var isOrderSel = !!state.selectedOrders[order.id];
+      var orderTotal = order.items.reduce(function(s, i) { return s + (i.cost || 0) * (i.units || 0); }, 0);
+      h += '<div class="order-card ' + (isOpen ? "expanded" : "") + '"' + (isOrderSel ? ' style="border-color:#6366F1;border-width:2px"' : '') + '>';
+      h += '<div class="order-header" onclick="state.expandedOrder=state.expandedOrder===\'' + order.id + '\'?null:\'' + order.id + '\';render()">';
+      h += '<input type="checkbox" class="checkbox" ' + (isOrderSel ? "checked" : "") + ' onclick="event.stopPropagation()" onchange="toggleSelectOrder(\'' + order.id + '\')" style="flex-shrink:0">';
+      h += '<span class="order-chevron ' + (isOpen ? "open" : "") + '">&#8250;</span>';
+      h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0">';
+      h += '<input class="order-id-edit" value="' + esc(order.id) + '" title="Click to edit order #" onclick="event.stopPropagation()" onblur="commitOrderId(this,\'' + order.spId + '\',\'' + esc(order.id) + '\')" onkeydown="if(event.key===\'Enter\')this.blur();if(event.key===\'Escape\'){this.value=\'' + esc(order.id) + '\';this.blur();}">';
+      h += '<span class="order-customer">' + esc(order.customer) + '</span>';
+      h += '<div class="order-meta">' + order.items.length + ' item' + (order.items.length !== 1 ? "s" : "") + ' - ' + esc(order.date);
+      if (order.archived && order.archivedDate) h += ' - <span style="color:#6366F1">Archived ' + esc(order.archivedDate) + '</span>';
+      var pf = getPrimaryFactory(order); if (pf) h += ' - ' + esc(pf);
+      h += ' - <span style="color:#10B981;font-weight:600">$' + orderTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span>';
+      h += '</div></div>';
+      h += '<span class="badge" style="background:' + oC + '18;color:' + oC + '"><span class="badge-dot" style="background:' + oC + '"></span>' + oS + '</span></div>';
+
+      // Notes always visible outside isOpen
+      h += '<div class="order-notes" style="padding:6px 16px;border-top:1px solid #F1F5F9"><textarea style="width:100%;border:none;outline:none;background:transparent;font-family:inherit;font-size:12px;color:#92400E;resize:none;" rows="1" placeholder="Order notes..." onclick="event.stopPropagation()" onblur="commitOrderNotes(this,' + order.spId + ')" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.blur();}">' + esc(order.notes || "") + '</textarea></div>';
+
+      if (isOpen) {
+        h += '<div style="border-top:1px solid #F1F5F9">';
+        if (order.items.length > 0 && state.view === "active") h += '<div class="select-all"><input type="checkbox" class="checkbox" ' + (allSel ? "checked" : "") + ' onchange="toggleSelectAll(\'' + order.id + '\');"><label onclick="toggleSelectAll(\'' + order.id + '\')">Select all</label></div>';
+        if (!order.items.length) h += '<div style="padding:20px 16px;text-align:center;color:#CBD5E1;font-size:12px">No items yet</div>';
+
+        order.items.forEach(function(item) {
+          var sC = getStatusColor(item.status);
+          var isSel = !!state.selectedItems[item.id];
+          h += '<div class="item-row ' + (isSel ? "selected" : "") + '">';
+          if (state.view === "active") h += '<input type="checkbox" class="checkbox" ' + (isSel ? "checked" : "") + ' onchange="toggleSelectItem(\'' + order.id + '\',\'' + item.id + '\')">'; 
+          if (item.image) {
+          h += '<div class="item-thumb" style="cursor:zoom-in" title="Click to view" onclick="viewItemImage(event,' + item.spId + ')">';
+          h += '<img src="' + item.image + '" style="width:100%;height:100%;object-fit:cover">';
+          h += '</div>';
+        } else {
+          h += '<div class="item-thumb" style="cursor:pointer" title="Upload image" onclick="document.getElementById(\'img_' + item.spId + '\').click()">';
+          h += '<span style="font-size:18px;opacity:0.2">&#128247;</span>';
+          h += '</div>';
+        }
+        h += '<input type="file" id="img_' + item.spId + '" accept="image/*" style="display:none" onchange="handleItemImageUpload(' + item.spId + ',this)">';
+        h += '<div class="item-info">';
+          if (item.brand) h += '<div style="font-size:10px;font-weight:600;color:#6366F1;margin-bottom:1px;text-transform:uppercase;letter-spacing:0.04em">' + esc(item.brand) + '</div>';
+          h += '<div class="item-name">' + esc(item.name) + '</div>';
+          h += '<div class="item-desc">' + esc(item.description) + (item.masterInner ? ' <span style="color:#64748B">· ' + esc(item.masterInner) + '</span>' : '') + '</div>';
+          h += '</div>';
+          var totalCost = (item.cost || 0) * (item.units || 0);
+          // Cost/unit — editable
+          h += '<div class="item-cost" onclick="startEditCost(event,\'' + item.id + '\',' + item.spId + ',' + (item.cost || 0) + ')" style="cursor:pointer" title="Click to edit"><div class="item-cost-val">$' + (item.cost || 0).toFixed(2) + '</div><div class="item-units-label">/ unit</div></div>';
+          // Units — editable
+          h += '<div class="item-units" onclick="startEditUnits(event,\'' + item.id + '\',' + item.spId + ',' + item.units + ')">' + item.units.toLocaleString() + '<div class="item-units-label">units</div></div>';
+          if (state.view === "active") {
+            // Factory
+            h += '<select class="item-select" style="color:' + (item.factory ? "#475569" : "#94A3B8") + '" onchange="updateItemData(' + item.spId + ',{Factory:this.value})"><option value="">Factory</option>';
+            state.factories.forEach(function(f) { h += '<option value="' + esc(f) + '"' + (item.factory === f ? " selected" : "") + '>' + esc(f) + '</option>'; });
+            h += '</select>';
+            // Status
+            h += '<select class="item-status" style="color:' + sC + ';background:' + sC + '18;border-color:' + sC + '30" onchange="updateItemData(' + item.spId + ',{Status:this.value})">';
+            state.statuses.forEach(function(st) { h += '<option value="' + esc(st) + '"' + (item.status === st ? " selected" : "") + '>' + esc(st) + '</option>'; });
+            h += '</select>';
+            // Ticketed toggle
+            h += '<button onclick="toggleTicketed(' + item.spId + ',\'' + (item.ticketed||"") + '\')" style="padding:3px 8px;border-radius:6px;border:1px solid;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;background:' + (item.ticketed==="Yes"?"#D1FAE5":"#FEF2F2") + ';color:' + (item.ticketed==="Yes"?"#065F46":"#991B1B") + ';border-color:' + (item.ticketed==="Yes"?"#6EE7B7":"#FCA5A5") + '">' + (item.ticketed==="Yes"?"Ticketed":"Unticketed") + '</button>';
+          }
+          // Total cost
+          h += '<div class="item-cost"><div class="item-cost-val">$' + totalCost.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div><div class="item-units-label">total</div></div>';
+          if (state.view === "active") {
+            h += '<button class="item-delete" onclick="confirmDeleteItem(' + item.spId + ',\'' + esc(item.name).replace(/'/g, "\\'") + '\')">x</button>';
+          }
+          h += '</div>';
+          // Notes row below item
+          h += '<div class="item-notes-row"><textarea class="item-notes-input" rows="1" placeholder="Add notes..." onblur="commitItemNotes(this,' + item.spId + ')" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.blur();}">' + esc(item.notes || "") + '</textarea></div>';
+        });
+
+        h += '<div class="order-actions">';
+        if (state.view === "active") {
+          h += '<div style="display:flex;gap:6px"><button class="btn btn-dashed btn-sm" onclick="state.modal=\'addItem\';state.modalData={orderId:\''  + order.id + '\',name:\'\',desc:\'\',units:\'\'};render()">+ Add Item</button>';
+          h += '<button class="btn btn-sm" onclick="exportOrder(\''  + order.id + '\')">&#11015; Export</button></div>';
+          h += '<div style="display:flex;gap:6px"><button class="btn btn-sm btn-archive" onclick="archiveOrderSP(state.orders.find(function(o){return o.id===\''  + order.id + '\'}))">Archive</button>';
+          h += '<button class="btn btn-sm btn-danger" onclick="confirmDeleteOrder(\''  + order.id + '\')">Delete</button></div>';
+        } else {
+          h += '<div style="display:flex;gap:6px"><button class="btn btn-sm btn-restore" onclick="restoreOrderSP(state.orders.find(function(o){return o.id===\''  + order.id + '\'}))">Restore</button>';
+          h += '<button class="btn btn-sm btn-danger" onclick="confirmDeleteOrder(\''  + order.id + '\')">Delete</button></div>';
+        }
+      }
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+
+  // -- MODALS --
+  if (state.modal === "newOrder") {
+    var d = state.modalData;
+    h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body">';
+    h += '<div class="modal-title">New Order</div><div class="modal-sub">Create an order, then add items</div>';
+    h += '<div class="field"><label class="field-label">Customer <span style="color:#EF4444">*</span></label><input class="field-input" value="' + esc(d.customer) + '" oninput="state.modalData.customer=this.value" placeholder="e.g. Acme Manufacturing"></div>';
+    h += '<div class="field"><label class="field-label">Notes</label><textarea class="field-input" rows="2" oninput="state.modalData.notes=this.value" placeholder="Special instructions...">' + esc(d.notes) + '</textarea></div>';
+    h += '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitNewOrder()">Create</button></div>';
+    h += '</div></div></div>';
+  } else if (state.modal === "addItem") {
+    var d = state.modalData;
+    var ord = state.orders.find(function(o) { return o.id === d.orderId; });
+    h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body">';
+    h += '<div class="modal-title">Add Item</div><div class="modal-sub">to ' + (ord ? esc(ord.customer) : "") + '</div>';
+    h += '<div class="field"><label class="field-label">Item Name <span style="color:#EF4444">*</span></label><input class="field-input" value="' + esc(d.name) + '" oninput="state.modalData.name=this.value" placeholder="e.g. Style # or Product Name"></div>';
+    h += '<div class="field"><label class="field-label">Brand</label><input class="field-input" value="' + esc(d.brand||"") + '" oninput="state.modalData.brand=this.value" placeholder="e.g. Ruby & Millie"></div>';
+    h += '<div class="field"><label class="field-label">Description</label><input class="field-input" value="' + esc(d.desc) + '" oninput="state.modalData.desc=this.value" placeholder="Specs..."></div>';
+    h += '<div style="display:flex;gap:10px"><div style="flex:1"><div class="field"><label class="field-label">Master / Inner</label><input class="field-input" value="' + esc(d.masterInner||"") + '" oninput="state.modalData.masterInner=this.value" placeholder="e.g. 48/12"></div></div>';
+    h += '<div style="flex:1"><div class="field"><label class="field-label">Units <span style="color:#EF4444">*</span></label><input class="field-input" type="number" value="' + esc(d.units) + '" oninput="state.modalData.units=this.value" placeholder="0"></div></div></div>';
+    h += '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="submitNewItem()">Add</button></div>';
+    h += '</div></div></div>';
+  } else if (state.modal === "settings") {
+    var tab = state.modalData.tab || "statuses";
+    var list = tab === "statuses" ? state.statuses : state.factories;
+    h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body">';
+    h += '<div class="modal-title">Settings</div>';
+    h += '<div class="tab-bar"><button class="tab-btn ' + (tab === "statuses" ? "active" : "") + '" onclick="state.modalData.tab=\'statuses\';render()">Statuses</button>';
+    h += '<button class="tab-btn ' + (tab === "factories" ? "active" : "") + '" onclick="state.modalData.tab=\'factories\';render()">Factories</button></div>';
+    if (tab === "statuses") h += '<div style="font-size:11px;color:#94A3B8;margin-bottom:10px">First = default. Last = complete.</div>';
+    list.forEach(function(v, i) {
+      h += '<div class="settings-item"><div style="display:flex;align-items:center;gap:8px">';
+      if (tab === "statuses") h += '<span style="width:8px;height:8px;border-radius:50%;background:' + SC[i % SC.length] + ';display:inline-block"></span>';
+      h += '<span style="font-size:13px;color:#1E293B">' + esc(v) + '</span></div>';
+      h += '<button class="item-delete" onclick="removeSetting(\'' + tab + '\',\'' + esc(v) + '\')">x</button></div>';
+    });
+    h += '<div style="display:flex;gap:8px;margin-top:12px"><input class="field-input" id="newSettingVal" placeholder="New ' + (tab === "statuses" ? "status" : "factory") + '" onkeydown="if(event.key===\'Enter\')addSetting(\'' + tab + '\')">';
+    h += '<button class="btn btn-primary" onclick="addSetting(\'' + tab + '\')">Add</button></div>';
+    h += '</div></div></div>';
+  } else if (state.modal === "confirm") {
+    h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><div class="modal-body">';
+    h += '<div style="font-size:15px;font-weight:700;color:#0F172A;margin-bottom:6px">Are you sure?</div>';
+    h += '<div style="font-size:13px;color:#64748B;margin-bottom:20px">' + (state.modalData.message || "") + '</div>';
+    h += '<div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button>';
+    h += '<button class="btn" style="background:#EF4444;color:#fff;border:none" onclick="state.modalData.onConfirm();closeModal()">Delete</button></div>';
+    h += '</div></div></div>';
+  } else if (state.modal === "import") {
+    var d = state.modalData;
+    if (d.step === "upload") {
+      h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal wide" onclick="event.stopPropagation()"><div class="modal-body">';
+      h += '<div class="modal-title">Import Spreadsheet</div><div class="modal-sub">Upload a file</div>';
+      h += '<div id="importDropZone" class="dropzone" onclick="event.stopPropagation();document.getElementById(\'importFileInput\').click()">';
+      h += '<div style="font-size:32px;margin-bottom:6px">&#128196;</div>';
+      h += '<div style="font-size:14px;font-weight:600;color:#475569">Drop file or click to browse</div>';
+      h += '<div style="font-size:12px;color:#94A3B8;margin-top:4px">.xlsx, .xls, .csv</div>';
+      h += '</div>';
+      // file input is persistent in DOM outside app div
+      if (d.error) h += '<div class="error-banner">' + esc(d.error) + '</div>';
+      h += '</div></div></div>';
+} else if (d.step === "map") {
+      var lb = {name:"Item Name",description:"Description",units:"Qty / Units"};
+      h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal wide" onclick="event.stopPropagation()"><div class="modal-body">';
+      h += '<div class="modal-title">Import Spreadsheet</div><div class="modal-sub">Verify mapping</div>';
+      h += '<div class="success-banner">' + d.rows.length + ' rows from <strong>' + esc(d.fileName) + '</strong></div>';
+      var lb2 = { name: "Item Name", description: "Description", units: "Qty / Units", brand: "Brand", masterInner: "Master / Inner", cost: "Cost / Unit", status: "Status", orderNum: "Order # (splits into separate orders)" };
+      ["name","description","units","brand","masterInner","cost","status","orderNum"].forEach(function(f) {
+        h += '<div class="map-row"><div class="map-label">' + lb2[f] + (f === "name" ? ' <span style="color:#EF4444">*</span>' : "") + (d.mapping[f] ? '<span style="color:#10B981;margin-left:4px">&#10003;</span>' : "") + '</div>';
+        h += '<select class="map-select ' + (d.mapping[f] ? "mapped" : "") + '" onchange="state.modalData.mapping.' + f + '=this.value;render()"><option value="">-- Skip --</option>';
+        d.columns.forEach(function(c) { h += '<option value="' + esc(c) + '"' + (d.mapping[f] === c ? " selected" : "") + '>' + esc(c) + '</option>'; });
+        h += '</select></div>';
+      });
+      h += '<div style="border-top:1px solid #F1F5F9;margin-top:14px;padding-top:14px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Customer <span style="color:#EF4444">*</span></div>';
+      h += '<div style="display:flex;gap:8px;margin-bottom:8px"><button class="tab-btn ' + (!d.useCol ? "active" : "") + '" onclick="state.modalData.useCol=false;render()">Type it in</button>';
+      h += '<button class="tab-btn ' + (d.useCol ? "active" : "") + '" onclick="state.modalData.useCol=true;render()">From column</button></div>';
+      if (d.useCol) {
+        h += '<select class="map-select ' + (d.mapping.customer ? "mapped" : "") + '" style="width:100%" onchange="state.modalData.mapping.customer=this.value;render()"><option value="">-- Select --</option>';
+        d.columns.forEach(function(c) { h += '<option value="' + esc(c) + '"' + (d.mapping.customer === c ? " selected" : "") + '>' + esc(c) + '</option>'; });
+        h += '</select>';
+      } else {
+        h += '<input class="field-input" value="' + esc(d.customerName || "") + '" oninput="state.modalData.customerName=this.value" placeholder="Customer name (required)">';
+      }
+      var hasCustomer = d.useCol ? !!d.mapping.customer : !!(d.customerName && d.customerName.trim());
+      var hasName = !!d.mapping.name;
+      var canPreview = hasCustomer && hasName;
+      h += '</div><div class="modal-actions"><button class="btn" onclick="state.modalData.step=\'upload\';render()">Back</button>';
+      h += '<button class="btn btn-primary" ' + (canPreview ? "" : "disabled style=\"background:#E2E8F0;color:#94A3B8;cursor:not-allowed\"") + ' onclick="' + (canPreview ? "state.modalData.step='preview';render()" : "") + '">Preview</button></div>';
+      h += '</div></div></div>';
+    } else if (d.step === "preview") {
+      h += '<div class="modal-overlay" onclick="closeModal()"><div class="modal wide" onclick="event.stopPropagation()"><div class="modal-body">';
+      h += '<div class="modal-title">Import Spreadsheet</div><div class="modal-sub">Preview</div>';
+      h += '<div style="border-radius:10px;border:1px solid #E2E8F0;overflow:auto;margin-bottom:14px"><table class="preview-table"><thead><tr><th>Customer</th><th>Item</th><th>Description</th><th style="text-align:right">Units</th></tr></thead><tbody>';
+      d.rows.slice(0, 5).forEach(function(row) {
+        var cust = d.useCol && d.mapping.customer ? String(row[d.mapping.customer] || "") : (d.customerName || "");
+        h += '<tr><td style="color:#1E293B;font-weight:500">' + (esc(cust) || "-") + '</td>';
+        h += '<td style="color:#1E293B;font-weight:500">' + (d.mapping.name ? esc(String(row[d.mapping.name] || "")) || "-" : "-") + '</td>';
+        h += '<td style="color:#94A3B8;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (d.mapping.description ? esc(String(row[d.mapping.description] || "")) || "-" : "-") + '</td>';
+        h += '<td style="color:#1E293B;font-weight:600;text-align:right">' + (d.mapping.units ? (parseInt(row[d.mapping.units]) || 0) : "-") + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+      h += '<div style="font-size:12px;color:#64748B;margin-bottom:14px">' + d.rows.length + ' items. All start as "' + state.statuses[0] + '".</div>';
+      h += '<div class="modal-actions"><button class="btn" onclick="state.modalData.step=\'map\';render()">Back</button>';
+      h += '<button class="btn btn-primary" onclick="submitImport()">Import ' + d.rows.length + ' Items</button></div>';
+      h += '</div></div></div>';
+    }
+  }
+
+  app.innerHTML = h;
+setTimeout(function () {
+  var el = document.getElementById("searchBox");
+  if (el) {
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }
+}, 0);
+}
+
+// -- EVENT HANDLERS --
+function closeModal() { state.modal = null; state.modalData = {}; render(); }
+function submitNewOrder() { var d = state.modalData; if (!d.customer) return; closeModal(); createOrder(d.customer, d.notes); }
+function submitNewItem() { var d = state.modalData; if (!d.name || !d.units) return; closeModal(); createItem(d.orderId, d.name, d.desc, parseInt(d.units), d.brand||"", d.masterInner||""); }
+function toggleSelectOrder(oid) {
+  if (state.selectedOrders[oid]) delete state.selectedOrders[oid];
+  else state.selectedOrders[oid] = true;
+  render();
+}
+
+function bulkExportOrders() {
+  var orders = state.orders.filter(function(o) { return state.selectedOrders[o.id]; });
+  if (!orders.length) return;
+  var wb = buildExportWb(orders);
+  XLSX.writeFile(wb, "Export_" + Object.keys(state.selectedOrders).join("_") + ".xlsx");
+  state.selectedOrders = {};
+  render();
+}
+function toggleSelectOrder(oid) {
+  if (state.selectedOrders[oid]) delete state.selectedOrders[oid];
+  else state.selectedOrders[oid] = true;
+  render();
+}
+
+
+function toggleSelectItem(oid, iid) { if (state.selectedItems[iid]) delete state.selectedItems[iid]; else state.selectedItems[iid] = oid; render(); }
+function toggleSelectAll(oid) { var o = state.orders.find(function(o) { return o.id === oid; }); if (!o) return; var all = o.items.every(function(i) { return state.selectedItems[i.id]; }); o.items.forEach(function(i) { if (all) delete state.selectedItems[i.id]; else state.selectedItems[i.id] = oid; }); render(); }
+function startEditUnits(e, iid, spId, val) { e.stopPropagation(); var el = e.currentTarget; el.innerHTML = '<input class="item-units-input" type="number" value="' + val + '" onblur="commitUnits(this,' + spId + ',' + val + ')" onkeydown="if(event.key===\'Enter\')this.blur();if(event.key===\'Escape\'){this.value=' + val + ';this.blur();}">'; el.querySelector("input").focus(); }
+function commitUnits(input, spId, old) { var v = parseInt(input.value); if (!isNaN(v) && v >= 0 && v !== old) updateItemData(spId, { Units: v }); else render(); }
+function confirmDeleteItem(spId, name) { state.modal = "confirm"; state.modalData = { message: 'Delete "' + name + '"? This cannot be undone.', onConfirm: function() { deleteItemSP(spId); } }; render(); }
+function confirmDeleteOrder(oid) { var o = state.orders.find(function(o) { return o.id === oid; }); state.modal = "confirm"; state.modalData = { message: "Delete " + oid + " (" + o.customer + ") and all items?", onConfirm: function() { deleteOrderSP(o); } }; render(); }
+function addSetting(tab) {
+  var input = document.getElementById("newSettingVal");
+  var v = input.value.trim();
+  if (!v) return;
+
+  var type = (tab === "statuses") ? "status" : "factory";
+
+  spCreateItem("AppSettings", {
+    Type_x002e_: type,
+    Value: v
+  }).then(function() {
+    return loadSettings();
+  }).then(function() {
+    input.value = "";
+    render();
+  });
+}
+  function removeSetting(tab, val) {
+  var type = (tab === "statuses") ? "status" : "factory";
+
+  spGetItems("AppSettings").then(function(items) {
+    var match = items.find(function(i) {
+      return i.Value === val && i.Type_x002e_ === type;
+    });
+
+    if (!match) return;
+
+    return spDeleteItem("AppSettings", match.Id);
+  }).then(function() {
+    return loadSettings();
+  }).then(function() {
+    render();
+  });
+}
+function handleImportDrop(e) { e.preventDefault(); handleImportFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]); }
+// Extract images from xlsx zip and map to row numbers
+function extractImagesFromXlsx(arrayBuffer, json) {
+  return new Promise(function(resolve) {
+    try {
+      var zip = XLSX.utils.cfb_new ? null : null;
+      // Use JSZip via XLSX internal zip reader
+      var data = new Uint8Array(arrayBuffer);
+      // XLSX exposes zip reading — parse the xlsx as a zip manually
+      var rowImages = {};
+      // Read the zip structure
+      var wb = XLSX.read(data, { type: "array", cellDates: true });
+      var sheetName = wb.SheetNames[0];
+
+      // Access the raw zip via XLSX's internal structure
+      // xlsx stores the cfb/zip as wb.Workbook parent
+      // We need to use XLSX.utils to access the zip
+      // Try to get the raw bytes and parse as zip
+      if (typeof JSZip !== 'undefined') {
+        JSZip.loadAsync(arrayBuffer).then(function(zip) {
+          var allFiles = Object.keys(zip.files);
+          console.log("ZIP files:", allFiles.filter(function(f) { return f.indexOf("drawing") >= 0 || f.indexOf("media") >= 0; }));
+          
+          var drawingFiles = allFiles.filter(function(f) { return f.match(/xl\/drawings\/drawing\d+\.xml/); });
+          console.log("Drawing files found:", drawingFiles);
+          if (drawingFiles.length === 0) { console.warn("No drawing files in xlsx"); resolve({}); return; }
+
+          zip.files[drawingFiles[0]].async("string").then(function(xml) {
+            // Handles both oneCellAnchor and twoCellAnchor
+            var anchors = xml.match(/<xdr:(?:one|two)CellAnchor[^>]*>[\s\S]*?<\/xdr:(?:one|two)CellAnchor>/g) || [];
+            console.log("Anchors found:", anchors.length);
+
+            var relFile = drawingFiles[0].replace("drawings/drawing", "drawings/_rels/drawing").replace(".xml", ".xml.rels");
+            console.log("Looking for rels file:", relFile);
+            if (!zip.files[relFile]) { console.warn("Rels file not found:", relFile); resolve({}); return; }
+
+            zip.files[relFile].async("string").then(function(relsXml) {
+              var relMap = {};
+              var relMatches = relsXml.match(/Id="([^"]+)"[^>]+Target="([^"]+)"/g) || [];
+              relMatches.forEach(function(rel) {
+                var id = rel.match(/Id="([^"]+)"/)[1];
+                var target = rel.match(/Target="([^"]+)"/)[1];
+                relMap[id] = target;
+              });
+              console.log("Rel map entries:", Object.keys(relMap).length);
+
+              var imagePromises = anchors.map(function(anchor) {
+                // Get row from <xdr:from><xdr:row> — first row tag inside anchor
+                var fromMatch = anchor.match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/);
+                // Get image rId from r:embed attribute
+                var rIdMatch = anchor.match(/r:embed="([^"]+)"/);
+                if (!fromMatch || !rIdMatch) return Promise.resolve(null);
+                var anchorRow = parseInt(fromMatch[1]); // 0-indexed from top of sheet
+                // anchorRow 0 = Excel row 1 (header), anchorRow 1 = Excel row 2 (first data row)
+                // json index = anchorRow - 1 (since header is row 1 = anchorRow 0)
+                var dataRow = anchorRow; // store as anchorRow, match against json index below
+                var rId = rIdMatch[1];
+                var mediaPath = relMap[rId];
+                if (!mediaPath) return Promise.resolve(null);
+                var fullPath = "xl/media/" + mediaPath.replace("../media/", "");
+                if (!zip.files[fullPath]) { console.warn("Media not found:", fullPath); return Promise.resolve(null); }
+                return zip.files[fullPath].async("base64").then(function(b64) {
+                  var mime = fullPath.match(/\.png$/i) ? "image/png" : "image/jpeg";
+                  return { row: dataRow, src: "data:" + mime + ";base64," + b64 };
+                });
+              });
+
+              Promise.all(imagePromises).then(function(results) {
+                results.forEach(function(r) { if (r) rowImages[r.row] = r.src; });
+                console.log("Extracted " + Object.keys(rowImages).length + " images");
+                console.log("Image row keys:", Object.keys(rowImages));
+                console.log("JSON row count:", json ? json.length : "N/A");
+                // Log first few matches
+                if (json) json.slice(0,3).forEach(function(r,i) { console.log("json["+i+"] _image:", r._image ? "YES" : "NO", "checking key", i+1, "in rowImages:", !!(rowImages[i+1])); });
+                resolve(rowImages);
+              });
+            }).catch(function(e) { console.error("Rels parse error:", e); resolve({}); });
+          }).catch(function(e) { console.error("Drawing parse error:", e); resolve({}); });
+        }).catch(function(e) { console.error("JSZip load error:", e); resolve({}); });
+      } else {
+        resolve({});
+      }
+    } catch(e) {
+      console.warn("Image extraction failed:", e);
+      resolve({});
+    }
+  });
+}
+
+function handleImportFile(file) {
+  if (!file) return;
+  if (/\.(csv|tsv)$/i.test(file.name)) {
+    Papa.parse(file, { header: true, skipEmptyLines: true, complete: function(r) { if (r.data && r.data.length) proceedToMap(file.name, Object.keys(r.data[0]), r.data, {}); else { state.modalData.error = "No data"; render(); } }, error: function() { state.modalData.error = "Could not read file"; render(); } });
+  } else {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var arrayBuffer = e.target.result;
+        var wb = XLSX.read(new Uint8Array(arrayBuffer), { type: "array" });
+        var json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+        if (!json.length) { state.modalData.error = "No data"; render(); return; }
+        // Try to extract images
+        extractImagesFromXlsx(arrayBuffer, json).then(function(rowImages) {
+          // Attach images to rows (json index 0 = data row 2)
+          json.forEach(function(row, idx) {
+            // anchorRow 1 = json[0], anchorRow 2 = json[1], etc.
+            row._image = rowImages[idx + 1] || null;
+          });
+          proceedToMap(file.name, Object.keys(json[0]).filter(function(k) { return k !== "_image"; }), json, rowImages);
+        });
+      } catch(ex) { state.modalData.error = "Could not read file"; render(); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+function proceedToMap(fn, cols, rows, rowImages) { var m = autoMap(cols); if (!m.brand) m.brand = ""; if (!m.masterInner) m.masterInner = ""; state.modalData = { step: "map", fileName: fn, columns: cols, rows: rows, rowImages: rowImages || {}, mapping: m, useCol: !!m.customer, customerName: "" }; render(); }
+function submitImport() {
+  var d = state.modalData; var grouped = {};
+  console.log("Import mapping:", JSON.stringify(d.mapping));
+  console.log("First row sample:", JSON.stringify(d.rows[0]));
+  d.rows.forEach(function(r) {
+    var c = d.useCol && d.mapping.customer ? String(r[d.mapping.customer] || "Unknown") : (d.customerName || "Imported");
+    // If orderNum column is mapped, use it to further split items into separate orders
+    var orderKey = d.mapping.orderNum ? (c + "||" + String(r[d.mapping.orderNum] || "")) : c;
+    if (!grouped[orderKey]) grouped[orderKey] = [];
+    if (grouped[orderKey]._customer === undefined) grouped[orderKey]._customer = c;
+    if (grouped[orderKey]._orderNum === undefined) grouped[orderKey]._orderNum = d.mapping.orderNum ? String(r[d.mapping.orderNum] || "") : "";
+    if (!grouped[c]) grouped[c] = [];
+    var itemStatus = "";
+    if (d.mapping.status && r[d.mapping.status]) {
+      var sv = String(r[d.mapping.status]).trim();
+      itemStatus = sv || state.statuses[0];
+    } else {
+      itemStatus = state.statuses[0];
+    }
+    grouped[orderKey].push({
+      name: d.mapping.name ? String(r[d.mapping.name] || "Unnamed") : "Unnamed",
+      description: d.mapping.description ? String(r[d.mapping.description] || "") : "",
+      brand: d.mapping.brand ? String(r[d.mapping.brand] || "") : "",
+      masterInner: d.mapping.masterInner ? String(r[d.mapping.masterInner] || "") : "",
+      units: d.mapping.units ? parseInt(r[d.mapping.units]) || 0 : 0,
+      cost: d.mapping.cost ? parseFloat(r[d.mapping.cost]) || 0 : 0,
+      status: itemStatus,
+      image: r._image || null
+    });
+  });
+  closeModal();
+  var ordersData = [];
+  for (var k in grouped) {
+    var grp = grouped[k];
+    var custName = grp._customer || k;
+    var orderNum = grp._orderNum || "";
+    var notesStr = orderNum ? "PO# " + orderNum + " | Imported from " + d.fileName : "Imported from " + d.fileName;
+    ordersData.push({ customer: custName, orderNum: orderNum, notes: notesStr, items: grp });
+  }
+  importOrders(ordersData);
+}
+
+// -- IMAGE COMPRESSION --
+function compressImage(base64DataUrl, maxWidth, quality) {
+  maxWidth = maxWidth || 800;
+  quality = quality || 0.75;
+  return new Promise(function(resolve) {
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var w = img.width, h = img.height;
+      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = function() { resolve(base64DataUrl); }; // fallback: return original
+    img.src = base64DataUrl;
+  });
+}
+
+// -- BULK FACTORY UPDATE --
+function bulkUpdateFactory(factory) {
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) {
+      return Object.assign({}, o, { items: o.items.map(function(i) {
+        return state.selectedItems[i.id] ? Object.assign({}, i, { factory: factory }) : i;
+      })});
+    });
+    state.selectedItems = {}; render(); return;
+  }
+  var promises = [];
+  state.orders.forEach(function(o) {
+    o.items.forEach(function(i) {
+      if (state.selectedItems[i.id]) promises.push(spUpdateItem(ITEMS_LIST, i.spId, { Factory: factory }));
+    });
+  });
+  Promise.all(promises).then(function() { state.selectedItems = {}; loadData(); });
+}
+
+// -- IMAGE POPUP --
+function viewItemImage(e, spId) {
+  e.stopPropagation();
+  // Find image from state
+  var src = null;
+  state.orders.forEach(function(o) { o.items.forEach(function(i) { if (i.spId === spId) src = i.image; }); });
+  if (!src) return;
+  var overlay = document.createElement('div');
+  overlay.className = 'img-popup-overlay';
+  var img = document.createElement('img');
+  img.src = src;
+  var close = document.createElement('span');
+  close.className = 'img-popup-close';
+  close.innerHTML = '&times;';
+  close.onclick = function() { overlay.remove(); };
+  overlay.appendChild(close);
+  overlay.appendChild(img);
+  overlay.onclick = function(ev) { if (ev.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+
+// -- IMAGE UPLOAD FOR MANUAL ITEM EDIT --
+function handleItemImageUpload(spId, fileInput) {
+  var file = fileInput.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = e.target.result;
+    // Compress first
+    compressImage(base64, 800, 0.75).then(function(compressed) {
+    if (demoMode) {
+      state.orders = state.orders.map(function(o) {
+        return Object.assign({}, o, { items: o.items.map(function(i) {
+          return i.spId === spId ? Object.assign({}, i, { image: compressed }) : i;
+        })});
+      });
+      render(); return;
+    }
+    var itemId = null;
+    state.orders.forEach(function(o) { o.items.forEach(function(i) { if (i.spId === spId) itemId = i.id; }); });
+    uploadImageToSP(compressed, itemId || ("item_" + spId)).then(function(imageUrl) {
+      return updateItemData(spId, { ImageURL: imageUrl });
+    }).then(function() {
+      loadData();
+    }).catch(function(err) {
+      console.error("Image upload failed:", err);
+      alert("Image upload failed: " + err.message);
+    });
+    }); // end compressImage
+  };
+  reader.readAsDataURL(file);
+}
+
+// -- COMMIT ORDER ID --
+function commitOrderId(input, spId, oldVal) {
+  var v = input.value.trim();
+  if (!v || v === oldVal) { input.value = oldVal; return; }
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return o.spId == spId ? Object.assign({}, o, { id: v }) : o; });
+    if (state.expandedOrder === oldVal) state.expandedOrder = v;
+    render(); return;
+  }
+  // Find items belonging to this order and update their OrderID too
+  var order = state.orders.find(function(o) { return o.spId == spId; });
+  var itemUpdates = order ? order.items.map(function(i) { return spUpdateItem(ITEMS_LIST, i.spId, { OrderID: v }); }) : [];
+  Promise.all([spUpdateItem(ORDERS_LIST, spId, { Title: v })].concat(itemUpdates)).then(function() {
+    if (state.expandedOrder === oldVal) state.expandedOrder = v;
+    loadData();
+  }).catch(function(err) { alert("Could not update order #: " + err.message); input.value = oldVal; });
+}
+
+// -- TOGGLE TICKETED --
+function toggleTicketed(spId, current) {
+  var newVal = current === "Yes" ? "No" : "Yes";
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) {
+      return Object.assign({}, o, { items: o.items.map(function(i) {
+        return i.spId === spId ? Object.assign({}, i, { ticketed: newVal }) : i;
+      })});
+    });
+    render(); return;
+  }
+  updateItemData(spId, { Ticketed: newVal });
+}
+
+/// -- TOGGLE TICKETED --
+
+// -- TOGGLE TICKETED --
+
+// -- TOGGLE TICKETED --
+
+// -- COMMIT ORDER NOTES --
+function commitOrderNotes(textarea, spId) {
+  var v = textarea.value;
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return o.spId == spId ? Object.assign({}, o, { notes: v }) : o; });
+    return;
+  }
+  spUpdateItem(ORDERS_LIST, spId, { Notes: v });
+}
+
+// -- EDIT COST INLINE --
+function startEditCost(e, iid, spId, val) {
+  e.stopPropagation();
+  var el = e.currentTarget;
+  var inp = document.createElement("input");
+  inp.className = "item-units-input";
+  inp.type = "number";
+  inp.step = "0.01";
+  inp.value = parseFloat(val).toFixed(2);
+  inp.style.width = "64px";
+  inp.onblur = function() { commitCost(inp, spId, val); };
+  inp.onkeydown = function(ev) {
+    if (ev.key === "Enter") inp.blur();
+    if (ev.key === "Escape") { inp.value = val; inp.blur(); }
+  };
+  el.innerHTML = "";
+  el.appendChild(inp);
+  inp.focus();
+}
+function commitCost(input, spId, old) {
+  var v = parseFloat(input.value);
+  if (!isNaN(v) && v >= 0 && v !== old) updateItemData(spId, { Cost: v });
+  else render();
+}
+
+// -- TOGGLE TICKETED --
+
+/// -- TOGGLE TICKETED --
+
+// -- TOGGLE TICKETED --
+
+// -- COMMIT ORDER NOTES --
+function commitOrderNotes(textarea, spId) {
+  var v = textarea.value;
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return o.spId == spId ? Object.assign({}, o, { notes: v }) : o; });
+    return;
+  }
+  spUpdateItem(ORDERS_LIST, spId, { Notes: v });
+}
+
+// -- TOGGLE TICKETED --
+
+/// -- TOGGLE TICKETED --
+
+// -- TOGGLE TICKETED --
+
+// -- COMMIT ORDER NOTES --
+function commitOrderNotes(textarea, spId) {
+  var v = textarea.value;
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) { return o.spId == spId ? Object.assign({}, o, { notes: v }) : o; });
+    return;
+  }
+  spUpdateItem(ORDERS_LIST, spId, { Notes: v });
+}
+
+// -- EDIT COST INLINE --
+function commitCost(input, spId, old) {
+  var v = parseFloat(input.value);
+  if (!isNaN(v) && v >= 0 && v !== old) updateItemData(spId, { Cost: v });
+  else render();
+}
+
+// -- EDIT COST INLINE --
+function commitCost(input, spId, old) {
+  var v = parseFloat(input.value);
+  if (!isNaN(v) && v >= 0 && v !== old) updateItemData(spId, { Cost: v });
+  else render();
+}
+
+// -- COMMIT ITEM NOTES --
+function commitItemNotes(textarea, spId) {
+  var v = textarea.value;
+  if (demoMode) {
+    state.orders = state.orders.map(function(o) {
+      return Object.assign({}, o, { items: o.items.map(function(i) { return i.spId === spId ? Object.assign({}, i, { notes: v }) : i; }) });
+    });
+    return;
+  }
+  spUpdateItem(ITEMS_LIST, spId, { Notes: v });
+}
+
+// -- EXPORT ORDER TO TEMPLATE FORMAT --
+// Embedded export template (base64)
+var EXPORT_TEMPLATE_B64 = "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";
+
+function buildExportWb(orders) {
+  // Load the template workbook which already has yellow bold headers
+  var templateBinary = atob(EXPORT_TEMPLATE_B64);
+  var bytes = new Uint8Array(templateBinary.length);
+  for (var i = 0; i < templateBinary.length; i++) bytes[i] = templateBinary.charCodeAt(i);
+  var wb = XLSX.read(bytes, { type: "array", cellStyles: true });
+  var ws = wb.Sheets[wb.SheetNames[0]];
+
+  // Clear any existing data rows (keep header row 1)
+  var ref = XLSX.utils.decode_range(ws["!ref"] || "A1:J1");
+  for (var r = 1; r <= ref.e.r; r++) {
+    for (var c = 0; c <= 9; c++) {
+      var addr = XLSX.utils.encode_cell({ r: r, c: c });
+      delete ws[addr];
+    }
+  }
+
+  // Center alignment style for data cells
+  var centerStyle = { alignment: { horizontal: "center", vertical: "center" } };
+
+  // Write data rows starting at row 2 (index 1)
+  var rowIdx = 1;
+  orders.forEach(function(order) {
+    order.items.forEach(function(item) {
+      var master = "", inner = "";
+      if (item.masterInner) {
+        var parts = item.masterInner.split("/");
+        inner = parts[0] ? parts[0].trim() : "";
+        master = parts[1] ? parts[1].trim() : "";
+      }
+      var rowData = [
+        item.brand || "",
+        item.description || "",
+        item.name || "",
+        "",
+        inner,
+        master,
+        item.cost || 0,
+        item.units || 0,
+        order.id || "",
+        item.factory || ""
+      ];
+      rowData.forEach(function(val, c) {
+        var addr = XLSX.utils.encode_cell({ r: rowIdx, c: c });
+        ws[addr] = { v: val, t: typeof val === "number" ? "n" : "s", s: centerStyle };
+      });
+      rowIdx++;
+    });
+  });
+
+  // Update range to include all data rows
+  ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rowIdx - 1, c: 9 } });
+  return wb;
+}
+
+function exportOrder(orderId) {
+  var order = state.orders.find(function(o) { return o.id === orderId; });
+  if (!order) return;
+  var wb = buildExportWb([order]);
+  XLSX.writeFile(wb, (order.id || "order") + "_" + (order.customer || "export").replace(/[^a-zA-Z0-9]/g,"_") + ".xlsx");
+}
+// -- INIT --
+initAuth();
+// Attach change handler directly to the persistent file input
+var _fileInput = document.getElementById('importFileInput');
+if (_fileInput) {
+  _fileInput.onchange = function() {
+    console.log('File input change fired, files:', this.files);
+    if (this.files && this.files[0]) {
+      handleImportFile(this.files[0]);
+      this.value = '';
+    }
+  };
+}
+document.body.addEventListener('drop', function(e) {
+  if (e.target && (e.target.id === 'importDropZone' || e.target.closest('#importDropZone'))) {
+    e.preventDefault();
+    var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) handleImportFile(file);
+  }
+});
+document.body.addEventListener('dragover', function(e) {
+  if (e.target && (e.target.id === 'importDropZone' || e.target.closest('#importDropZone'))) {
+    e.preventDefault();
+  }
+});
+</script>
+</body>
+</html>
